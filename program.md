@@ -1,6 +1,6 @@
 # autoresearch
 
-This is an experiment to have the LLM do its own research.
+This is an experiment to have the LLM do its own research. This run is scoped to a university deep learning assignment: train a char-level LSTM to generate Irish folk tunes in ABC notation (IrishMAN dataset).
 
 ## Setup
 
@@ -9,21 +9,30 @@ To set up a new experiment, work with the user to:
 1. **Agree on a run tag**: propose a tag based on today's date (e.g. `mar5`). The branch `autoresearch/<tag>` must not already exist — this is a fresh run.
 2. **Create the branch**: `git checkout -b autoresearch/<tag>` from current master.
 3. **Read the in-scope files**: The repo is small. Read these files for full context:
+   - `AUFGABENSTELLUNG.md` — the actual assignment (submission requirements, bonus points, deadline). The autoresearch loop below only covers the training/architecture-search part of it, not evaluation notebooks or the write-up.
    - `README.md` — repository context.
-   - `prepare.py` — fixed constants, data prep, tokenizer, dataloader, evaluation. Do not modify.
-   - `train.py` — the file you modify. Model architecture, optimizer, training loop.
-4. **Verify data exists**: Check that `~/.cache/autoresearch/` contains data shards and a tokenizer. If not, tell the human to run `uv run prepare.py`.
+   - `prepare.py` — fixed constants, IrishMAN data download, char-level tokenizer, dataloader, evaluation. Do not modify.
+   - `train.py` — the file you modify. LSTM model (`CharLSTM`), optimizer, training loop.
+4. **Verify data exists**: Check that `~/.cache/autoresearch/` contains the IrishMAN data and a tokenizer. If not, tell the human to run `uv run prepare.py`.
 5. **Initialize results.tsv**: Create `results.tsv` with just the header row. The baseline will be recorded after the first run.
 6. **Confirm and go**: Confirm setup looks good.
 
 Once you get confirmation, kick off the experimentation.
+
+## Goal
+
+Beyond "lower val_bpb" in the abstract, the human's current research direction for this run:
+
+> Optimiere das LSTM so, dass es langfristige Rhythmen (wie die typischen 4/4- oder 6/8-Taktstrukturen von irischen Jigs und Reels) besser im Gedächtnis behält. Versuche Architektur-Anpassungen in `train.py`, um den Loss zu senken.
+
+Concretely: `val_bpb` rewards good next-character prediction everywhere, but bar-line (`|`) placement and meter consistency (the `M:4/4` / `M:6/8` header vs. the actual bar lengths) are where long-range memory shows up most clearly in ABC notation. When judging whether an architecture change is working, don't just watch the aggregate `val_bpb` number — spot-check a few generated samples for whether bar structure stays coherent over a full tune, not just locally. Ideas worth trying toward this: larger `hidden_size` (more memory capacity), more `NUM_LAYERS` (hierarchical structure), tuning `DROPOUT`, or architectural tweaks in `CharLSTM` (e.g. a learned initial hidden state instead of zero-init, residual/skip connections between LSTM layers). This section reflects the human's current framing — if they redirect the goal, update this section rather than the loop mechanics below.
 
 ## Experimentation
 
 Each experiment runs on a single GPU. The training script runs for a **fixed time budget of 5 minutes** (wall clock training time, excluding startup/compilation). You launch it simply as: `uv run train.py`.
 
 **What you CAN do:**
-- Modify `train.py` — this is the only file you edit. Everything is fair game: model architecture, optimizer, hyperparameters, training loop, batch size, model size, etc.
+- Modify `train.py` — this is the only file you edit. Everything is fair game: `CharLSTM` architecture, `NUM_LAYERS`, `HIDDEN_SIZE`, `EMBED_SIZE`, `DROPOUT`, optimizer (AdamW, SGD, ...), learning rate / schedule, `GRAD_CLIP`, batch size, training loop, etc.
 
 **What you CANNOT do:**
 - Modify `prepare.py`. It is read-only. It contains the fixed evaluation, data loading, tokenizer, and training constants (time budget, sequence length, etc).
@@ -47,12 +56,12 @@ Once the script finishes it prints a summary like this:
 val_bpb:          0.997900
 training_seconds: 300.1
 total_seconds:    325.9
-peak_vram_mb:     45060.2
-mfu_percent:      39.80
-total_tokens_M:   499.6
-num_steps:        953
-num_params_M:     50.3
-depth:            8
+peak_vram_mb:     1024.3
+total_tokens_M:   38.6
+num_steps:        589
+num_params_M:     0.847
+num_layers:       2
+hidden_size:      256
 ```
 
 Note that the script is configured to always stop after 5 minutes, so depending on the computing platform of this computer the numbers might look different. You can extract the key metric from the log file:
@@ -81,10 +90,10 @@ Example:
 
 ```
 commit	val_bpb	memory_gb	status	description
-a1b2c3d	0.997900	44.0	keep	baseline
-b2c3d4e	0.993200	44.2	keep	increase LR to 0.04
-c3d4e5f	1.005000	44.0	discard	switch to GeLU activation
-d4e5f6g	0.000000	0.0	crash	double model width (OOM)
+a1b2c3d	0.997900	1.0	keep	baseline
+b2c3d4e	0.993200	1.0	keep	increase hidden_size to 512
+c3d4e5f	1.005000	1.0	discard	switch optimizer to SGD
+d4e5f6g	0.000000	0.0	crash	hidden_size 4096 (OOM)
 ```
 
 ## The experiment loop
