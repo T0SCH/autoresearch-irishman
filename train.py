@@ -85,12 +85,23 @@ TOTAL_BATCH_SIZE = DEVICE_BATCH_SIZE * MAX_SEQ_LEN  # no grad accumulation by de
 # Setup: tokenizer, model, optimizer, dataloader
 # ---------------------------------------------------------------------------
 
+def sync():
+    if device.type == "cuda":
+        torch.cuda.synchronize()
+    elif device.type == "mps":
+        torch.mps.synchronize()
+
+
 t_start = time.time()
 torch.manual_seed(42)
-torch.mps.manual_seed(42)
+device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+if device.type == "cuda":
+    torch.cuda.manual_seed(42)
+elif device.type == "mps":
+    torch.mps.manual_seed(42)
+print(f"Device: {device.type}")
 torch.set_float32_matmul_precision("high")
-device = torch.device("mps")
-autocast_ctx = torch.amp.autocast(device_type="mps", dtype=torch.bfloat16)
+autocast_ctx = torch.amp.autocast(device_type=device.type, dtype=torch.bfloat16)
 
 tokenizer = Tokenizer.from_directory()
 vocab_size = tokenizer.get_vocab_size()
@@ -112,7 +123,7 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, betas=ADAM_B
 for group in optimizer.param_groups:
     group["initial_lr"] = group["lr"]
 
-train_loader = make_dataloader(tokenizer, DEVICE_BATCH_SIZE, MAX_SEQ_LEN, "train")
+train_loader = make_dataloader(tokenizer, DEVICE_BATCH_SIZE, MAX_SEQ_LEN, "train", device)
 x, y, epoch = next(train_loader)  # prefetch first batch
 
 print(f"Time budget: {TIME_BUDGET}s")
@@ -139,7 +150,7 @@ total_training_time = 0
 step = 0
 
 while True:
-    torch.mps.synchronize()
+    sync()
     t0 = time.time()
     for micro_step in range(grad_accum_steps):
         with autocast_ctx:
@@ -166,7 +177,7 @@ while True:
         print("FAIL")
         exit(1)
 
-    torch.mps.synchronize()
+    sync()
     t1 = time.time()
     dt = t1 - t0
 
@@ -204,11 +215,16 @@ total_tokens = step * TOTAL_BATCH_SIZE
 # Final eval
 model.eval()
 with autocast_ctx:
-    val_bpb = evaluate_bpb(model, tokenizer, DEVICE_BATCH_SIZE)
+    val_bpb = evaluate_bpb(model, tokenizer, DEVICE_BATCH_SIZE, device)
 
 # Final summary
 t_end = time.time()
-peak_vram_mb = torch.mps.current_allocated_memory() / 1024 / 1024  # MPS has no peak tracker, current is the closest signal
+if device.type == "cuda":
+    peak_vram_mb = torch.cuda.max_memory_allocated() / 1024 / 1024
+elif device.type == "mps":
+    peak_vram_mb = torch.mps.current_allocated_memory() / 1024 / 1024  # MPS has no peak tracker, current is the closest signal
+else:
+    peak_vram_mb = 0.0
 
 print("---")
 print(f"val_bpb:          {val_bpb:.6f}")
