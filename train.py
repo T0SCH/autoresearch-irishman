@@ -87,10 +87,10 @@ TOTAL_BATCH_SIZE = DEVICE_BATCH_SIZE * MAX_SEQ_LEN  # no grad accumulation by de
 
 t_start = time.time()
 torch.manual_seed(42)
-torch.cuda.manual_seed(42)
+torch.mps.manual_seed(42)
 torch.set_float32_matmul_precision("high")
-device = torch.device("cuda")
-autocast_ctx = torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16)
+device = torch.device("mps")
+autocast_ctx = torch.amp.autocast(device_type="mps", dtype=torch.bfloat16)
 
 tokenizer = Tokenizer.from_directory()
 vocab_size = tokenizer.get_vocab_size()
@@ -139,7 +139,7 @@ total_training_time = 0
 step = 0
 
 while True:
-    torch.cuda.synchronize()
+    torch.mps.synchronize()
     t0 = time.time()
     for micro_step in range(grad_accum_steps):
         with autocast_ctx:
@@ -166,7 +166,7 @@ while True:
         print("FAIL")
         exit(1)
 
-    torch.cuda.synchronize()
+    torch.mps.synchronize()
     t1 = time.time()
     dt = t1 - t0
 
@@ -208,7 +208,7 @@ with autocast_ctx:
 
 # Final summary
 t_end = time.time()
-peak_vram_mb = torch.cuda.max_memory_allocated() / 1024 / 1024
+peak_vram_mb = torch.mps.current_allocated_memory() / 1024 / 1024  # MPS has no peak tracker, current is the closest signal
 
 print("---")
 print(f"val_bpb:          {val_bpb:.6f}")
