@@ -15,3 +15,4 @@ cfd7f13	1.722063	2.5	844	43.1	keep	hidden_size 384->1024 (human idea: probe cuDN
 90c60eb	1.692497	2.7	816	41.6	keep	embed_size 128->256 at hidden_size=1024, new best (launched before human's embed_size-not-worth-it note)
 b1b2d1e	1.690385	1.4	1554	35.1	keep	batch_size 64->32 at hidden_size=1024 (human idea: update-limited not data-limited), new best
 d1a3c35	0.000000	0.0	0	0.0	crash	IRNN recipe (relu + identity-init weight_hh) at hidden_size=1024, loss exploded/NaN on first step(s)
+e3f05ed	1.753826	0.7	2573	25.0	discard	batch_size 32->16, worse despite more steps -- gradient noise outweighs update-count benefit
