@@ -10,3 +10,4 @@ fa8245a	1.395289	0.6954	0.9389	0.8	9254	302.9	0.290	keep	stateful windowed loade
 2645747	1.358830	0.6915	0.9338	0.7	3249	106.1	0.960	keep-prov	HIDDEN_SIZE 128->256 under stateful windowing (seq_len=256) -- new best but tokens_M only 33% of keep-row median, throughput confound
 bcba215	1.402730	0.6804	0.9309	1.4	1781	116.0	0.960	discard	WINDOW_BATCH_SIZE 128->256 at hidden_size=256, throughput-restore attempt -- worse, doesn't confirm keep-prov either
 818ff28	1.429434	0.6937	0.9385	0.8	9211	301.5	0.290	discard	time-based LR warmup+cosine schedule alone, peak=0.003 (human steer, isolated from 5fc6b30's LR-peak change) -- worse than constant LR
+0959fb6	1.386632	0.6869	0.9301	0.8	9406	307.9	0.290	keep	WEIGHT_DECAY 0.0->0.05 isolated re-test (human steer) -- marginal new best, within noise but no complexity cost either way
