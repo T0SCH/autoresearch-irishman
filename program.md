@@ -106,7 +106,17 @@ d4e5f6g	0.000000	0.0	crash	hidden_size 4096 (OOM)
 **Notes:** anything worth remembering — why it did/didn't work, if known
 ```
 
-`Source` matters for the write-up (which ideas were the agent's own vs. steered by the human). Until the `human_input.md` mailbox exists, this is always `agent`.
+`Source` matters for the write-up (which ideas were the agent's own vs. steered by the human).
+
+## Receiving input from the human mid-loop
+
+`human_input.md` (repo root, gitignored, not part of the ledger) is a mailbox. The human may edit it at any time — while you're mid-experiment, between experiments, whenever — since you're not watching the chat continuously during an overnight run, this is the reliable channel, not a chat message that might arrive while you're deep in a 5-minute run.
+
+Check it at the start of every loop iteration (step 0 below), before touching `train.py`. If it doesn't exist or is empty, there's nothing to do, carry on to step 1.
+
+If it exists and has content:
+- **Content is exactly `STOP` (case-insensitive, ignoring surrounding whitespace)**: this is not a tip, it's an instruction to end the autonomous loop. Do not start a new experiment. If you're reading this between experiments (the normal case, since you only check at iteration boundaries), you're already done — finish any in-progress ledger commit for the last experiment if you haven't, then stop and summarize what happened across the session for the human. Do not discard/reset the last kept state to do this.
+- **Any other content**: treat it as a human-supplied idea or steer for your *next* experiment (this iteration's step 2). Fold it into what you try. Log it with `Source: human (<summary>)` in `experiment_log.md` once you've acted on it. Clear the file (empty it, or delete it) after reading, so you don't re-process the same note forever.
 
 ## The experiment loop
 
@@ -114,6 +124,7 @@ The experiment runs on a dedicated branch (e.g. `autoresearch/mar5` or `autorese
 
 LOOP FOREVER:
 
+0. Check `human_input.md` (see above) — this can end the loop before you start another experiment.
 1. Look at the git state: the current branch/commit we're on
 2. Tune `train.py` with an experimental idea by directly hacking the code.
 3. git commit (train.py only — not the ledger files, they come later, see step 7)

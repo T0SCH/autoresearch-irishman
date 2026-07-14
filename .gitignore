@@ -22,3 +22,6 @@ dev/
 
 # Local wandb offline-run logs
 wandb/
+
+# Mid-loop human-to-agent mailbox (ephemeral, not part of the ledger)
+human_input.md
