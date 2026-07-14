@@ -64,7 +64,7 @@ class CharRNN(nn.Module):
 
 # Model architecture
 EMBED_SIZE = 128
-HIDDEN_SIZE = 384
+HIDDEN_SIZE = 1024
 NUM_LAYERS = 2
 DROPOUT = 0.0             # helps once training does multiple epochs (confirmed on a fast GPU: 3 epochs
                           # in 300s overfits without it); on slower hardware a run may not even finish one
