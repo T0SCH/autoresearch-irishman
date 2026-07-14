@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import wandb
 
 from prepare import MAX_SEQ_LEN, TIME_BUDGET, Tokenizer, make_dataloader, evaluate_bpb
 
@@ -113,6 +114,15 @@ x, y, epoch = next(train_loader)  # prefetch first batch
 
 print(f"Time budget: {TIME_BUDGET}s")
 
+# offline mode: no network calls during the run (avoids stalls in the unattended overnight loop),
+# `wandb sync wandb/offline-run-*` uploads everything afterward
+wandb.init(project="autoresearch-irishman", mode="offline", config={
+    "device": device.type, "embed_size": EMBED_SIZE, "hidden_size": HIDDEN_SIZE,
+    "num_layers": NUM_LAYERS, "dropout": DROPOUT, "learning_rate": LEARNING_RATE,
+    "weight_decay": WEIGHT_DECAY, "grad_clip": GRAD_CLIP, "batch_size": BATCH_SIZE,
+    "num_params": num_params,
+})
+
 # ---------------------------------------------------------------------------
 # Training loop
 # ---------------------------------------------------------------------------
@@ -153,6 +163,7 @@ while True:
     remaining = max(0, TIME_BUDGET - total_training_time)
 
     print(f"\rstep {step:05d} ({pct_done:.1f}%) | loss: {train_loss_f:.6f} | dt: {dt*1000:.0f}ms | tok/sec: {tok_per_sec:,} | epoch: {epoch} | remaining: {remaining:.0f}s    ", end="", flush=True)
+    wandb.log({"loss": train_loss_f, "tok_per_sec": tok_per_sec, "epoch": epoch}, step=step)
 
     step += 1
 
@@ -185,3 +196,6 @@ print(f"num_steps:        {step}")
 print(f"num_params_M:     {num_params / 1e6:.3f}")
 print(f"num_layers:       {NUM_LAYERS}")
 print(f"hidden_size:      {HIDDEN_SIZE}")
+
+wandb.log({"val_bpb": val_bpb, "peak_vram_mb": peak_vram_mb, "total_tokens_M": total_tokens / 1e6})
+wandb.finish()
