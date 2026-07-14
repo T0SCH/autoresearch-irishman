@@ -37,3 +37,9 @@ One entry per experiment (kept, discarded, or crashed), appended by the loop's l
 **Change:** `DROPOUT` 0.0 → 0.1 on top of hidden_size=384 + learned h0 (retrying the dropout idea at a milder rate, reasoning that this base only gets through part of 1 epoch vs. baseline's 3, so overfitting pressure should be much lower).
 **Result:** val_bpb 1.839526 (worse than current best 1.833233), memory 1.9GB
 **Notes:** Still slightly worse, same as the 0.2 attempt at baseline. Two data points now both say dropout hurts in this fixed-time-budget setup — likely because the model here is throughput/data-limited rather than overfit-limited (partial epoch, not multiple), so dropout just removes useful signal without a matching overfitting benefit to offset it. Dropping this lever; not worth a third attempt at yet another rate.
+
+## 7e4cea3 — keep
+**Source:** agent
+**Change:** `WEIGHT_DECAY` 0.0 → 0.01 (AdamW decoupled weight decay) on top of hidden_size=384 + learned h0.
+**Result:** val_bpb 1.811846 (down from 1.833233), memory 1.9GB, throughput unchanged (53.5M tokens / 1044 steps)
+**Notes:** Clear improvement (~0.021), unlike both dropout attempts which hurt. Makes sense given the data/throughput-limited hypothesis from the dropout notes: weight decay shrinks parameter norms directly rather than injecting training-time noise, so it doesn't cost useful gradient signal the way dropout does under a low-step-count regime — it's a much gentler regularizer here. New best: val_bpb 1.811846.
