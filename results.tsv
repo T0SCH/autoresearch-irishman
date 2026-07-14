@@ -1,1 +1,2 @@
 commit	val_bpb	memory_gb	status	description
+1eaa8e2	2.093672	1.4	keep	baseline nn.RNN (embed128/hidden256/2layers, AdamW lr3e-3)
