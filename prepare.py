@@ -75,18 +75,16 @@ def train_tokenizer():
 
     print("Tokenizer: scanning training data for unique characters...")
     tunes = load_tunes("train")
-    chars = set()
-    for tune in tunes:
-        chars.update(tune)
-    chars = sorted(chars)
+    chars = sorted(set("".join(tunes)))
     print(f"Tokenizer: found {len(chars)} unique characters")
 
     with open(vocab_path, "w") as f:
         json.dump({"chars": chars, "bos_token": BOS_TOKEN, "unk_token": UNK_TOKEN, "pad_token": PAD_TOKEN}, f)
     print(f"Tokenizer: saved vocab to {vocab_path}")
 
-    # token_bytes: byte length per token id, for BPB eval. Specials (BOS, UNK, PAD) are 0.
-    token_bytes_list = [len(c.encode("utf-8")) for c in chars] + [0, 0, 0]
+    # token_bytes: byte length per token id, for BPB eval. ABC notation is ASCII, so every
+    # real character is 1 byte; specials (BOS, UNK, PAD) are 0.
+    token_bytes_list = [1] * len(chars) + [0, 0, 0]
     torch.save(torch.tensor(token_bytes_list, dtype=torch.int32), token_bytes_path)
     print(f"Tokenizer: saved token_bytes to {token_bytes_path}")
 

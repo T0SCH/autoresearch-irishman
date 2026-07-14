@@ -24,7 +24,7 @@ class RNNConfig:
     embed_size: int = 128
     hidden_size: int = 256
     num_layers: int = 2
-    dropout: float = 0.2
+    dropout: float = 0.0
     pad_token_id: int = 0
 
 
@@ -63,18 +63,14 @@ class CharRNN(nn.Module):
 EMBED_SIZE = 128
 HIDDEN_SIZE = 256
 NUM_LAYERS = 2
-DROPOUT = 0.2
+DROPOUT = 0.0             # regularization matters over many epochs; a 5-min run barely completes one
 
 # Optimization
 LEARNING_RATE = 0.003
 WEIGHT_DECAY = 0.0
-ADAM_BETAS = (0.9, 0.99)
-GRAD_CLIP = 1.0          # RNNs are prone to exploding gradients, clip by global norm
-WARMUP_RATIO = 0.0       # fraction of time budget for LR warmup
-WARMDOWN_RATIO = 0.5     # fraction of time budget for LR warmdown
-FINAL_LR_FRAC = 0.0      # final LR as fraction of initial
+GRAD_CLIP = 1.0            # RNNs are prone to exploding gradients, clip by global norm
 
-BATCH_SIZE = 64           # reduce if OOM
+BATCH_SIZE = 64            # reduce if OOM
 
 # ---------------------------------------------------------------------------
 # Setup: tokenizer, model, optimizer, dataloader
@@ -109,25 +105,12 @@ model = CharRNN(config).to(device)
 num_params = sum(p.numel() for p in model.parameters())
 print(f"Num params: {num_params:,}")
 
-optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, betas=ADAM_BETAS, weight_decay=WEIGHT_DECAY)
-for group in optimizer.param_groups:
-    group["initial_lr"] = group["lr"]
+optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 
 train_loader = make_dataloader(tokenizer, BATCH_SIZE, MAX_SEQ_LEN, "train", device)
 x, y, epoch = next(train_loader)  # prefetch first batch
 
 print(f"Time budget: {TIME_BUDGET}s")
-
-# Schedule (based on progress = training_time / TIME_BUDGET)
-
-def get_lr_multiplier(progress):
-    if progress < WARMUP_RATIO:
-        return progress / WARMUP_RATIO if WARMUP_RATIO > 0 else 1.0
-    elif progress < 1.0 - WARMDOWN_RATIO:
-        return 1.0
-    else:
-        cooldown = (1.0 - progress) / WARMDOWN_RATIO
-        return cooldown * 1.0 + (1 - cooldown) * FINAL_LR_FRAC
 
 # ---------------------------------------------------------------------------
 # Training loop
@@ -147,12 +130,6 @@ while True:
     loss.backward()
     x, y, epoch = next(train_loader)
 
-    # LR schedule
-    progress = min(total_training_time / TIME_BUDGET, 1.0)
-    lrm = get_lr_multiplier(progress)
-    for group in optimizer.param_groups:
-        group["lr"] = group["initial_lr"] * lrm
-
     torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
     optimizer.step()
     model.zero_grad(set_to_none=True)
@@ -170,11 +147,11 @@ while True:
         total_training_time += dt
         total_tokens += tokens_this_step
 
-    pct_done = 100 * progress
+    pct_done = 100 * min(total_training_time / TIME_BUDGET, 1.0)
     tok_per_sec = int(tokens_this_step / dt)
     remaining = max(0, TIME_BUDGET - total_training_time)
 
-    print(f"\rstep {step:05d} ({pct_done:.1f}%) | loss: {train_loss_f:.6f} | lrm: {lrm:.2f} | dt: {dt*1000:.0f}ms | tok/sec: {tok_per_sec:,} | epoch: {epoch} | remaining: {remaining:.0f}s    ", end="", flush=True)
+    print(f"\rstep {step:05d} ({pct_done:.1f}%) | loss: {train_loss_f:.6f} | dt: {dt*1000:.0f}ms | tok/sec: {tok_per_sec:,} | epoch: {epoch} | remaining: {remaining:.0f}s    ", end="", flush=True)
 
     step += 1
 
