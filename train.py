@@ -5,6 +5,7 @@ Usage: uv run train.py
 """
 
 import math
+import random
 import time
 from dataclasses import asdict, dataclass
 
@@ -13,7 +14,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import wandb
 
-from prepare import MAX_SEQ_LEN, TIME_BUDGET, Tokenizer, make_dataloader, evaluate_bpb
+from prepare import MAX_SEQ_LEN, TIME_BUDGET, Tokenizer, load_tunes, make_dataloader, evaluate_bpb
 
 # ---------------------------------------------------------------------------
 # RNN model
@@ -59,6 +60,57 @@ class CharRNN(nn.Module):
         return logits
 
 # ---------------------------------------------------------------------------
+# Length-bucketed training dataloader
+# ---------------------------------------------------------------------------
+
+def make_bucketed_dataloader(tokenizer, token_budget, max_items, T, device, seed=42):
+    """
+    Length-bucketed TRAIN-only dataloader: greedily packs tunes into a batch until
+    items_in_batch * max_len_in_batch would exceed token_budget (capped at max_items),
+    instead of make_dataloader's fixed batch size + pad-to-longest-in-random-batch.
+    Measured padding waste under random batch_size=32 batching was ~59% of tokens
+    (x.numel() includes padding, which the loss/eval both mask out) -- short tunes
+    landing with a long one in the same random batch means most of that batch's
+    compute goes to PAD. Bucketing keeps real compute per step roughly constant
+    instead: many short tunes per batch, few long ones, ~10% padding waste measured.
+    A small random jitter is added to lengths before sorting, and buckets are rebuilt
+    (rejittered) every epoch, so tunes of similar length don't always land in the same
+    batch together epoch after epoch (which would correlate their gradients).
+    Only replaces the TRAIN loader -- evaluate_bpb's internal loader (prepare.py,
+    unmodified) and the quick_eval val_loader both keep fixed-batch_size make_dataloader
+    so the metrics stay comparable across configs.
+    """
+    tunes = load_tunes("train")
+    bos, pad = tokenizer.get_bos_token_id(), tokenizer.get_pad_token_id()
+    encoded = [tokenizer.encode(t, prepend=bos)[:T + 1] for t in tunes]
+    rng = random.Random(seed)
+    epoch = 1
+
+    while True:
+        order = sorted(range(len(encoded)), key=lambda idx: len(encoded[idx]) + rng.uniform(-20, 20))
+        i = 0
+        while i < len(order):
+            bucket = [order[i]]
+            max_len = len(encoded[order[i]])
+            i += 1
+            while i < len(order) and len(bucket) < max_items:
+                cand_len = max(max_len, len(encoded[order[i]]))
+                if (len(bucket) + 1) * cand_len > token_budget:
+                    break
+                bucket.append(order[i])
+                max_len = cand_len
+                i += 1
+
+            rows = [list(encoded[j]) for j in bucket]
+            width = max(len(row) for row in rows)
+            for row in rows:
+                row.extend([pad] * (width - len(row)))
+
+            batch = torch.tensor(rows, dtype=torch.long).to(device)
+            yield batch[:, :-1].contiguous(), batch[:, 1:].contiguous(), epoch
+        epoch += 1
+
+# ---------------------------------------------------------------------------
 # Hyperparameters (edit these directly, no CLI flags needed)
 # ---------------------------------------------------------------------------
 
@@ -76,7 +128,12 @@ GRAD_CLIP = 1.0            # RNNs are prone to exploding gradients, clip by glob
 WARMUP_STEPS = 20          # linear warmup, then cosine decay over the wall-clock time budget
                            # (time-based, not step-based -- step count varies a lot across configs)
 
-BATCH_SIZE = 32            # reduce if OOM
+BATCH_SIZE = 32            # only used for the val_loader/evaluate_bpb (fixed-batch, must stay
+                           # comparable across configs) -- training uses TOKEN_BUDGET below instead
+TOKEN_BUDGET = 8192        # length-bucketed training batches: pack items until items*max_len_in_bucket
+                           # hits this (~median tune length(258) * 32, our batch_size sweet spot) --
+                           # cuts padding waste from ~59% (random batch_size=32) to ~10% measured
+MAX_BUCKET_ITEMS = 128     # cap so very-short-tune buckets don't get absurdly large
 EVAL_EVERY = 50            # steps between quick val checks (loss/top1/top5) for wandb charts
 
 SAVE_CHECKPOINT = False    # off by default -- every kept experiment would otherwise add a multi-MB
@@ -117,7 +174,7 @@ print(f"Num params: {num_params:,}")
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 
-train_loader = make_dataloader(tokenizer, BATCH_SIZE, MAX_SEQ_LEN, "train", device)
+train_loader = make_bucketed_dataloader(tokenizer, TOKEN_BUDGET, MAX_BUCKET_ITEMS, MAX_SEQ_LEN, device)
 val_loader = make_dataloader(tokenizer, BATCH_SIZE, MAX_SEQ_LEN, "val", device)
 x, y, epoch = next(train_loader)  # prefetch first batch
 
@@ -129,7 +186,7 @@ wandb.init(project="autoresearch-irishman", mode="offline", config={
     "device": device.type, "embed_size": EMBED_SIZE, "hidden_size": HIDDEN_SIZE,
     "num_layers": NUM_LAYERS, "dropout": DROPOUT, "learning_rate": LEARNING_RATE,
     "weight_decay": WEIGHT_DECAY, "grad_clip": GRAD_CLIP, "batch_size": BATCH_SIZE,
-    "num_params": num_params,
+    "token_budget": TOKEN_BUDGET, "max_bucket_items": MAX_BUCKET_ITEMS, "num_params": num_params,
 })
 
 
