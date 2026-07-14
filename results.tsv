@@ -21,3 +21,4 @@ c30583f	0.000000	0.0	0	0.0	crash	IRNN recipe retry at LR=0.0003 (10x lower), sti
 c0fe683	1.683150	1.4	1556	35.1	discard	LEARNING_RATE 0.0015->0.0008, worse -- brackets optimum around 0.0015
 ce2bfc9	1.637362	0.5	3953	31.7	keep	length-bucketed training dataloader (human idea), padding 59%->10%, new best
 791a0c4	1.724212	0.5	6094	24.1	discard	TOKEN_BUDGET 8192->4096, worse despite more steps -- same noise-floor pattern as batch_size sweep
+5ac5f32	1.617260	0.7	2238	36.1	keep	TOKEN_BUDGET 8192->16384, new best (opposite direction from batch_size finding)

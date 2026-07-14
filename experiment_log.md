@@ -137,3 +137,9 @@ One entry per experiment (kept, discarded, or crashed), appended by the loop's l
 **Change:** `TOKEN_BUDGET` 8192 → 4096, testing whether even more (smaller, real-token) updates helps under the now-low-padding bucketed loader.
 **Result:** val_bpb 1.724212 (worse than 1.637362), memory 0.5GB (unchanged), num_steps 6094 (up from 3953)
 **Notes:** Same pattern as the earlier `batch_size` sweep (64→32 helped, 32→16 hurt): there's a real-update-count sweet spot, and going past it into noisier/smaller-batch territory hurts val_bpb even with more steps — despite this being a different mechanism (shrinking the real-token budget vs. just shrinking batch size under heavy padding). top1_acc ticked up slightly (0.6624 vs 0.6615, same single-batch-noise caveat as before) but the ground-truth metric disagrees. TOKEN_BUDGET=8192 stands; testing 16384 next to check the other direction before calling it settled.
+
+## 5ac5f32 — keep
+**Source:** agent
+**Change:** `TOKEN_BUDGET` 8192 → 16384 (doubled), checking the other bracket direction after 4096 hurt.
+**Result:** val_bpb 1.617260 (down from 1.637362 — new best), memory 0.7GB (up slightly from 0.5GB), num_steps 2238 (down from 3953, roughly half as expected)
+**Notes:** Surprising direction: unlike the `batch_size` sweep (where fewer/smaller-batch updates always hurt) and unlike 4096 (which also hurt), *larger* real-token batches with fewer, less-noisy updates won here. So the update-count-vs-noise tradeoff isn't monotonic in the same direction across every axis — under the bucketed loader specifically, bigger effective batches (with proportionally larger buckets across the whole length distribution, not just longer tunes) seem to give a better gradient signal-to-noise ratio than the extra step count from 8192 was worth. New best: val_bpb 1.617260. Testing even higher (32768) to see if the trend continues before settling.
