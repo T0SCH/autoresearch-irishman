@@ -51,3 +51,9 @@ One entry per experiment (kept, discarded, or crashed), appended by the loop's l
 **Change:** Added `WARMUP_STEPS = 20` (linear LR warmup) followed by cosine decay of the LR down to 0, scheduled over wall-clock progress (`total_training_time / TIME_BUDGET`) rather than step count, applied every step before `optimizer.step()`. On top of hidden_size=384 + learned h0 + weight_decay=0.01.
 **Result:** val_bpb 1.763448 (down from 1.811846), memory 1.9GB, throughput unchanged (53.5M tokens / 1044 steps)
 **Notes:** Best result yet, and the biggest single-experiment improvement since the initial hidden_size jump (~0.048). Time-based (not step-based) scheduling was a deliberate choice: step count varies wildly across configs in this fixed-wall-clock setup (baseline ~8000 steps vs. this config's ~1044), so a step-count-tuned schedule wouldn't transfer. Standard technique, cheap (10 lines), clear win — good fit for the simplicity criterion. New best: val_bpb 1.763448.
+
+## aa5f65e — discard
+**Source:** agent
+**Change:** `NUM_LAYERS` 2 → 3 on top of the current best (hidden_size=384 + learned h0 + weight_decay=0.01 + LR warmup/cosine).
+**Result:** val_bpb 1.833008 (worse than 1.763448), memory 2.1GB (up from 1.9GB), throughput down further (36.0M tokens / 709 steps, vs. 53.5M / 1044 for the 2-layer version)
+**Notes:** Extra layer adds more compute per step on top of an already throughput-limited config (hidden_size=384 already sits in the slow cuDNN kernel regime), so it saw even less data than the 2-layer run in the same 300s, and val_bpb got worse. Consistent with num_layers being a straightforward cost here rather than a useful hierarchical-structure win at this data/time budget — not chasing this further for now.
