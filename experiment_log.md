@@ -119,3 +119,9 @@ One entry per experiment (kept, discarded, or crashed), appended by the loop's l
 **Change:** `LEARNING_RATE` 0.003 → 0.0015 (peak, before warmup/cosine schedule scales it) on top of hidden_size=1024 + embed_size=256 + learned h0 + weight_decay=0.05 + batch_size=32. The 0.003 value predates most of the current stack — it was last implicitly validated back at batch_size=64.
 **Result:** val_bpb 1.658872 (down from 1.690385 — clear new best), memory 1.4GB, throughput essentially unchanged (35.4M tokens / 1572 steps)
 **Notes:** Solid win, and the batch-size/LR scaling heuristic intuition paid off — top1_acc also jumped nicely (0.6351→0.6462). New best: val_bpb 1.658872. Worth bracketing with a higher LR (e.g. 0.006) too, to confirm 0.0015 isn't just "lower is always better" but an actual optimum.
+
+## c0fe683 — discard
+**Source:** agent
+**Change:** `LEARNING_RATE` 0.0015 → 0.0008, testing whether lowering further continues to help.
+**Result:** val_bpb 1.683150 (worse than 1.658872), memory 1.4GB, throughput unchanged (35.1M tokens / 1556 steps)
+**Notes:** Worse than 0.0015, and worse than not lowering at all past that point — nicely brackets the optimum: 0.003 (worse) → 0.0015 (best) → 0.0008 (worse again). Treating LR≈0.0015 as settled for this stack.
