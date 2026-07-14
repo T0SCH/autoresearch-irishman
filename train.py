@@ -138,11 +138,7 @@ def make_stateful_windowed_dataloader(tokenizer, seq_len, batch_size, T, device,
 RNN_TYPE = "lstm"  # not a hyperparameter — set per worktree to tag the architecture family in
                           # wandb (rnn/lstm/gru/birnn); the agent updates this when it swaps the recurrent cell
 EMBED_SIZE = 128
-HIDDEN_SIZE = 256          # throughput-matched retest of run 2645747's unconfirmed keep-prov lead
-                          # (val_bpb 1.358830 at seq_len=256, but only 33% of median tokens_M).
-                          # This time paired with TRAIN_SEQ_LEN halved back to 128 to buy back the
-                          # steps/tokens hidden_size=256 costs (matching fa8245a's seq_len=128 throughput),
-                          # on top of the now-confirmed weight_decay=0.05/dropout=0.1.
+HIDDEN_SIZE = 128
 NUM_LAYERS = 2
 DROPOUT = 0.1             # human steer: the one LSTM-allowed dropout check per program.md (RNN failed
                           # 4x across every config there) -- now is the right moment: strong config
@@ -162,9 +158,12 @@ GRAD_CLIP = 1.0            # RNNs are prone to exploding gradients, clip by glob
 
 BATCH_SIZE = 64            # only used for the val_loader/evaluate_bpb (fixed-batch, must stay
                            # comparable across configs) -- training uses the stateful windowed loader below
-TRAIN_SEQ_LEN = 128        # halved back from 256 specifically to buy back throughput at HIDDEN_SIZE=256
-                           # (the throughput-matched retest lever noted in run bcba215's discard entry)
-WINDOW_BATCH_SIZE = 256    # matches fa8245a's seq_len=128 setting (batch_size*seq_len ~= 32768)
+TRAIN_SEQ_LEN = 256        # truncated-BPTT window length; doubled from the confirmed-keep 128 now
+                           # that stateful carry works, to see whether a longer single BPTT horizon
+                           # (fewer, bigger windows/tune) helps further or whether 128 already captured
+                           # most of the benefit
+WINDOW_BATCH_SIZE = 128    # halved vs. seq_len=128's 256 to hold batch_size*seq_len ~= 32768 constant,
+                           # isolating window length from total tokens/step
 EVAL_EVERY = 50            # steps between quick val checks (loss/top1/top5) for wandb charts
 
 SAVE_CHECKPOINT = False    # off by default -- every kept experiment would otherwise add a multi-MB
