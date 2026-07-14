@@ -35,6 +35,7 @@ class CharRNN(nn.Module):
         super().__init__()
         self.config = config
         self.embed = nn.Embedding(config.vocab_size, config.embed_size)
+        assert config.embed_size == config.hidden_size, "weight tying requires embed_size == hidden_size"
         self.rnn = nn.LSTM(
             input_size=config.embed_size,
             hidden_size=config.hidden_size,
@@ -44,6 +45,11 @@ class CharRNN(nn.Module):
         )
         self.drop = nn.Dropout(config.dropout)
         self.head = nn.Linear(config.hidden_size, config.vocab_size)
+        self.head.weight = self.embed.weight  # weight tying (own idea) -- embed_size==hidden_size
+                                              # makes the shapes match (both [vocab_size, hidden_size]).
+                                              # Classic char-rnn/LM trick: shares the input/output token
+                                              # representation, cuts ~vocab_size*hidden_size duplicate
+                                              # params and often regularizes/improves generalization.
         self.h0 = nn.Parameter(torch.zeros(config.num_layers, 1, config.hidden_size))
         self.c0 = nn.Parameter(torch.zeros(config.num_layers, 1, config.hidden_size))
         self.last_hidden = None  # side channel: (h_n, c_n) detached, set by every forward() call --
