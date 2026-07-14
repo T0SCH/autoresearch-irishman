@@ -43,10 +43,12 @@ class CharRNN(nn.Module):
         )
         self.drop = nn.Dropout(config.dropout)
         self.head = nn.Linear(config.hidden_size, config.vocab_size)
+        self.h0 = nn.Parameter(torch.zeros(config.num_layers, 1, config.hidden_size))
 
     def forward(self, idx, targets=None, reduction='mean'):
         x = self.embed(idx)
-        x, _ = self.rnn(x)  # zero-initialized hidden state per batch, no state carry across steps
+        h0 = self.h0.expand(-1, x.size(0), -1).contiguous()
+        x, _ = self.rnn(x, h0)  # learned initial hidden state (shared across batch), no state carry across steps
         x = self.drop(x)
         logits = self.head(x)
 
