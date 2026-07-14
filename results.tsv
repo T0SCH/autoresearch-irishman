@@ -31,3 +31,4 @@ fec4724	1.530929	1.4	1456	47.3	discard	stateful truncated-BPTT (carry hidden sta
 a6b15da	1.552942	1.4	1429	46.5	discard	dropout=0.1 retry under windowed loader (4th attempt), still hurts
 237e10b	1.534946	1.4	1474	47.9	discard	LEARNING_RATE 0.0015->0.003 re-test under windowed loader (human idea), worse but much closer than old whole-tune bracket
 6b177dd	1.527844	1.4	1462	47.5	discard	LEARNING_RATE=0.002 (intermediate step), essentially indistinguishable from 0.0015 but technically worse
+13dcf8a	1.542737	1.4	1485	48.3	discard	GRAD_CLIP 1.0->5.0, confirms clipping wasn't binding (grad_norm ~0.21, unchanged), no improvement
