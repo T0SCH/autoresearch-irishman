@@ -127,22 +127,30 @@ LOOP FOREVER:
 0. Check `human_input.md` (see above) — this can end the loop before you start another experiment.
 1. Look at the git state: the current branch/commit we're on
 2. Tune `train.py` with an experimental idea by directly hacking the code.
-3. git commit (train.py only — not the ledger files, they come later, see step 7)
+3. git commit (train.py only — not the ledger files, they come later, see step 8)
 4. Run the experiment: `uv run train.py > run.log 2>&1` (redirect everything — do NOT use tee or let output flood your context)
-5. Read out the results: `grep "^val_bpb:\|^peak_vram_mb:" run.log`
-6. If the grep output is empty, the run crashed. Run `tail -n 50 run.log` to read the Python stack trace and attempt a fix. If you can't get things to work after more than a few attempts, give up.
-7. Decide keep or discard/crash, then act in this order:
+5. Sync wandb, regardless of what step 4 did — offline runs live under `wandb/offline-run-*` and are otherwise as ephemeral as the VM itself (unlike the ledger, `wandb/` is gitignored, nothing protects it from a disconnect). Attempt each not-yet-synced run individually, with a timeout so a stuck sync can't stall the loop the way the HF Xet hang once did:
+   ```bash
+   for d in wandb/offline-run-*; do
+     [ -d "$d" ] || continue
+     if timeout 30 uv run wandb sync "$d"; then rm -rf "$d"; fi
+   done
+   ```
+   Only delete a run's local directory once its own sync succeeded. A failed or timed-out sync just leaves that directory in place — the same loop picks it up again next iteration, so nothing needs retry bookkeeping.
+6. Read out the results: `grep "^val_bpb:\|^peak_vram_mb:" run.log`
+7. If the grep output is empty, the run crashed. Run `tail -n 50 run.log` to read the Python stack trace and attempt a fix. If you can't get things to work after more than a few attempts, give up.
+8. Decide keep or discard/crash, then act in this order:
    - **Keep**: leave the step-3 commit in place. `git push origin <branch>` (`-u` on the first push).
    - **Discard or crash**: `git reset --hard` back to the commit from before step 3 — this throws away the train.py change, on purpose.
    - **Either way, now append to `results.tsv` and `experiment_log.md`** describing what just happened, and commit *only these two files* as a fresh commit on top of wherever HEAD ended up (the kept train.py commit, or the clean pre-experiment state after a reset). Push this commit too.
 
-### Committing the ledger separately (why step 7 is ordered this way)
+### Committing the ledger separately (why step 8 is ordered this way)
 
 The ledger commit must never be bundled into the step-3 experimental commit, and must always happen *after* the keep/discard decision — otherwise a discard's `git reset --hard` deletes its own ledger entry along with the code, and you lose the record that the attempt ever happened. Committing the ledger update as its own commit, always last, means:
 - A **kept** experiment: two commits land — the code change, then the ledger update.
 - A **discarded/crashed** experiment: the code commit is reset away entirely; only the ledger commit survives, so `results.tsv`/`experiment_log.md` still show the attempt even though train.py itself shows no trace of it.
 
-Both cases push, so the ledger survives disconnects the same way kept code does (we run on ephemeral cloud VMs — see the push note in step 7).
+Both cases push, so the ledger survives disconnects the same way kept code does (we run on ephemeral cloud VMs — see the push note in step 8).
 
 The idea is that you are a completely autonomous researcher trying things out. If they work, keep. If they don't, discard. And you're advancing the branch so that you can iterate. If you feel like you're getting stuck in some way, you can rewind but you should probably do this very very sparingly (if ever).
 
