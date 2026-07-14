@@ -138,7 +138,7 @@ def make_stateful_windowed_dataloader(tokenizer, seq_len, batch_size, T, device,
 RNN_TYPE = "lstm"  # not a hyperparameter — set per worktree to tag the architecture family in
                           # wandb (rnn/lstm/gru/birnn); the agent updates this when it swaps the recurrent cell
 EMBED_SIZE = 128
-HIDDEN_SIZE = 256
+HIDDEN_SIZE = 128
 NUM_LAYERS = 2
 DROPOUT = 0.0             # helps once training does multiple epochs (confirmed on a fast GPU: 3 epochs
                           # in 300s overfits without it); on slower hardware a run may not even finish one
@@ -157,9 +157,8 @@ TRAIN_SEQ_LEN = 256        # truncated-BPTT window length; doubled from the conf
                            # that stateful carry works, to see whether a longer single BPTT horizon
                            # (fewer, bigger windows/tune) helps further or whether 128 already captured
                            # most of the benefit
-WINDOW_BATCH_SIZE = 256    # doubled from 128: throughput-restoring re-test lever for run 2645747's
-                           # HIDDEN_SIZE=256 keep-prov (more parallel lanes -> more tokens/step,
-                           # testing whether better GPU utilization at hidden=256 closes the gap)
+WINDOW_BATCH_SIZE = 128    # halved vs. seq_len=128's 256 to hold batch_size*seq_len ~= 32768 constant,
+                           # isolating window length from total tokens/step
 EVAL_EVERY = 50            # steps between quick val checks (loss/top1/top5) for wandb charts
 
 SAVE_CHECKPOINT = False    # off by default -- every kept experiment would otherwise add a multi-MB
