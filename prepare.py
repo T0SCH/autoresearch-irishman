@@ -9,12 +9,10 @@ Data and tokenizer are stored in ~/.cache/autoresearch/.
 """
 
 import os
-import sys
-import time
 import math
 import json
 
-import requests
+from huggingface_hub import hf_hub_download
 import torch
 
 # ---------------------------------------------------------------------------
@@ -32,7 +30,7 @@ EVAL_TOKENS = 500_000     # approx. number of tokens for val eval (~most of the 
 CACHE_DIR = os.path.join(os.path.expanduser("~"), ".cache", "autoresearch")
 DATA_DIR = os.path.join(CACHE_DIR, "data")
 TOKENIZER_DIR = os.path.join(CACHE_DIR, "tokenizer")
-BASE_URL = "https://huggingface.co/datasets/sander-wood/irishman/resolve/main"
+REPO_ID = "sander-wood/irishman"
 TRAIN_FILENAME = "train.json"
 VAL_FILENAME = "validation.json"
 ABC_FIELD = "abc notation"  # the field in each record holding the tune text
@@ -45,50 +43,11 @@ PAD_TOKEN = "<PAD>"
 # Data download
 # ---------------------------------------------------------------------------
 
-def download_file(filename):
-    """Download one dataset file with retries. Exits on repeated failure."""
-    filepath = os.path.join(DATA_DIR, filename)
-    if os.path.exists(filepath):
-        return
-
-    url = f"{BASE_URL}/{filename}"
-    max_attempts = 5
-    for attempt in range(1, max_attempts + 1):
-        try:
-            response = requests.get(url, stream=True, timeout=60)
-            response.raise_for_status()
-            temp_path = filepath + ".tmp"
-            with open(temp_path, "wb") as f:
-                for chunk in response.iter_content(chunk_size=1024 * 1024):
-                    if chunk:
-                        f.write(chunk)
-            os.rename(temp_path, filepath)
-            print(f"  Downloaded {filename}")
-            return
-        except (requests.RequestException, IOError) as e:
-            print(f"  Attempt {attempt}/{max_attempts} failed for {filename}: {e}")
-            for path in [filepath + ".tmp", filepath]:
-                if os.path.exists(path):
-                    try:
-                        os.remove(path)
-                    except OSError:
-                        pass
-            if attempt < max_attempts:
-                time.sleep(2 ** attempt)
-    print(f"  Failed to download {filename} after {max_attempts} attempts")
-    sys.exit(1)
-
-
 def download_data():
-    """Download the (pre-split) IrishMAN train/validation files."""
-    os.makedirs(DATA_DIR, exist_ok=True)
-    existing = [f for f in (TRAIN_FILENAME, VAL_FILENAME) if os.path.exists(os.path.join(DATA_DIR, f))]
-    if len(existing) == 2:
-        print(f"Data: train/validation already downloaded at {DATA_DIR}")
-        return
+    """Download the (pre-split) IrishMAN train/validation files. Skips files already cached."""
     print("Data: downloading IrishMAN train/validation splits...")
-    download_file(TRAIN_FILENAME)
-    download_file(VAL_FILENAME)
+    for filename in (TRAIN_FILENAME, VAL_FILENAME):
+        hf_hub_download(repo_id=REPO_ID, filename=filename, repo_type="dataset", local_dir=DATA_DIR)
     print(f"Data: ready at {DATA_DIR}")
 
 # ---------------------------------------------------------------------------
