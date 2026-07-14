@@ -27,6 +27,8 @@ Beyond "lower val_bpb" in the abstract, the human's current research direction f
 
 Concretely: `val_bpb` rewards good next-character prediction everywhere, but bar-line (`|`) placement and meter consistency (the `M:4/4` / `M:6/8` header vs. the actual bar lengths) are where long-range memory shows up most clearly in ABC notation. When judging whether an architecture change is working, don't just watch the aggregate `val_bpb` number — spot-check a few generated samples for whether bar structure stays coherent over a full tune, not just locally. The baseline is a plain `nn.RNN`, which is known to struggle with exactly this kind of long-range dependency (vanishing gradients) — if `val_bpb`/sample quality plateaus and bar structure still falls apart on longer tunes, swapping `nn.RNN` for `nn.LSTM` or `nn.GRU` in `CharRNN` is the most direct next lever, not just a hyperparameter tweak. Other ideas worth trying: larger `hidden_size` (more memory capacity), more `NUM_LAYERS` (hierarchical structure), tuning `DROPOUT`, or architectural tweaks (e.g. a learned initial hidden state instead of zero-init, residual/skip connections between layers). This section reflects the human's current framing — if they redirect the goal, update this section rather than the loop mechanics below.
 
+**Worktree scope**: swap `nn.RNN` for `nn.LSTM` in `CharRNN` as your first experiment (baseline run is still the unmodified `nn.RNN` per the setup protocol below), then push everything else — hidden_size, num_layers, dropout, optimizer, LR schedule.
+
 ## Experimentation
 
 Each experiment runs on a single GPU. The training script runs for a **fixed time budget of 5 minutes** (wall clock training time, excluding startup/compilation). You launch it simply as: `uv run train.py`.
