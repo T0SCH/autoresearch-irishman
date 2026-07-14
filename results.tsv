@@ -8,3 +8,4 @@ commit	val_bpb	memory_gb	num_steps	tokens_M	status	description
 7e4cea3	1.811846	1.9	1044	53.5	keep	weight_decay=0.01 (AdamW) on hidden_size=384+learned h0, new best
 1b6bde9	1.763448	1.9	1044	53.5	keep	LR warmup(20 steps)+cosine decay over time budget, new best
 aa5f65e	1.833008	2.1	709	36.0	discard	NUM_LAYERS 2->3 on current best base, worse val_bpb + fewer tokens/higher mem
+cfd7f13	1.722063	2.5	844	43.1	keep	hidden_size 384->1024 (human idea: probe cuDNN cliff), new best
