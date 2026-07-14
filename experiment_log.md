@@ -143,3 +143,9 @@ One entry per experiment (kept, discarded, or crashed), appended by the loop's l
 **Change:** `TOKEN_BUDGET` 8192 → 16384 (doubled), checking the other bracket direction after 4096 hurt.
 **Result:** val_bpb 1.617260 (down from 1.637362 — new best), memory 0.7GB (up slightly from 0.5GB), num_steps 2238 (down from 3953, roughly half as expected)
 **Notes:** Surprising direction: unlike the `batch_size` sweep (where fewer/smaller-batch updates always hurt) and unlike 4096 (which also hurt), *larger* real-token batches with fewer, less-noisy updates won here. So the update-count-vs-noise tradeoff isn't monotonic in the same direction across every axis — under the bucketed loader specifically, bigger effective batches (with proportionally larger buckets across the whole length distribution, not just longer tunes) seem to give a better gradient signal-to-noise ratio than the extra step count from 8192 was worth. New best: val_bpb 1.617260. Testing even higher (32768) to see if the trend continues before settling.
+
+## ff1eb40 — keep
+**Source:** agent
+**Change:** `TOKEN_BUDGET` 16384 → 32768 (doubled again), checking whether the larger-budget trend continues.
+**Result:** val_bpb 1.614071 (down from 1.617260 — marginal new best), memory 1.4GB (roughly doubled from 0.7GB), num_steps 1400 (down from 2238)
+**Notes:** Diminishing returns — the improvement here (~0.003) is much smaller than 8192→16384's (~0.02), while memory cost doubled and step count dropped further. Keeping it since it's a real (if small) win, but not chasing this axis further (e.g. 65536): a bigger, more promising lever just arrived from the human (truncated BPTT), pursuing that instead of squeezing more out of TOKEN_BUDGET.
