@@ -71,7 +71,7 @@ DROPOUT = 0.0             # helps once training does multiple epochs (confirmed 
 
 # Optimization
 LEARNING_RATE = 0.003
-WEIGHT_DECAY = 0.0
+WEIGHT_DECAY = 0.01
 GRAD_CLIP = 1.0            # RNNs are prone to exploding gradients, clip by global norm
 
 BATCH_SIZE = 64            # reduce if OOM
