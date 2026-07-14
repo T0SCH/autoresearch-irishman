@@ -161,3 +161,9 @@ One entry per experiment (kept, discarded, or crashed), appended by the loop's l
 **Change:** `TRAIN_SEQ_LEN` 64 → 32, `WINDOW_BATCH_SIZE` 512 → 1024 (kept batch_size×seq_len≈32768 constant, isolating window length from total real tokens/step).
 **Result:** val_bpb 1.562154 (worse than 1.526216), memory 1.5GB, num_steps 1458 (essentially unchanged from 1463 — confirms the tokens/step control worked)
 **Notes:** With step count and real-token throughput held equal, window length alone made the difference: 32 is too short to capture as much useful within-window dependency as 64, even though a vanilla RNN's effective memory is nominally in the same 10-50 range either window length exceeds. Testing 128 next to bracket the other direction before settling on 64.
+
+## 928e2a9 — discard
+**Source:** agent (human-suggested sweep direction, agent-picked value)
+**Change:** `TRAIN_SEQ_LEN` 64 → 128, `WINDOW_BATCH_SIZE` 512 → 256 (kept batch_size×seq_len≈32768 constant, same isolation approach as the 32 test).
+**Result:** val_bpb 1.551335 (worse than 1.526216), memory 1.4GB, num_steps 1456 (essentially unchanged, confirms tokens/step control)
+**Notes:** Nicely brackets 64 as a local optimum on this axis: 32 (worse) → 64 (best) → 128 (worse). Consistent with a vanilla RNN's effective memory ceiling being somewhere around 64 — going longer doesn't add useful signal (the extra context beyond ~64 steps back is already inaccessible to the gradient) but does spend the same token budget on fewer, larger-window batches with less per-step diversity. `TRAIN_SEQ_LEN=64` settled. Moving to the human's other flagged follow-up: a STATEFUL variant of the windowed loader (carry hidden state across a tune's own windows, detach between them for true truncated BPTT, learned h0 only at each tune's real start) to restore the cross-window context this stateless version discards.
