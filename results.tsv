@@ -6,3 +6,4 @@ commit	val_bpb	memory_gb	num_steps	tokens_M	status	description
 49edaa4	1.833233	1.9	1045	53.6	keep	learned initial hidden state (h0 param) instead of zero-init
 4f5a853	1.839526	1.9	1045	53.6	discard	dropout=0.1 on hidden_size=384+learned h0, slightly worse (steps/tokens estimated, same config as 49edaa4)
 7e4cea3	1.811846	1.9	1044	53.5	keep	weight_decay=0.01 (AdamW) on hidden_size=384+learned h0, new best
+1b6bde9	1.763448	1.9	1044	53.5	keep	LR warmup(20 steps)+cosine decay over time budget, new best
