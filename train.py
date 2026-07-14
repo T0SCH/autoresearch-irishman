@@ -73,6 +73,7 @@ WEIGHT_DECAY = 0.0
 GRAD_CLIP = 1.0            # RNNs are prone to exploding gradients, clip by global norm
 
 BATCH_SIZE = 64            # reduce if OOM
+EVAL_EVERY = 50            # steps between quick val checks (loss/top1/top5) for wandb charts
 
 # ---------------------------------------------------------------------------
 # Setup: tokenizer, model, optimizer, dataloader
@@ -110,6 +111,7 @@ print(f"Num params: {num_params:,}")
 optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 
 train_loader = make_dataloader(tokenizer, BATCH_SIZE, MAX_SEQ_LEN, "train", device)
+val_loader = make_dataloader(tokenizer, BATCH_SIZE, MAX_SEQ_LEN, "val", device)
 x, y, epoch = next(train_loader)  # prefetch first batch
 
 print(f"Time budget: {TIME_BUDGET}s")
@@ -122,6 +124,22 @@ wandb.init(project="autoresearch-irishman", mode="offline", config={
     "weight_decay": WEIGHT_DECAY, "grad_clip": GRAD_CLIP, "batch_size": BATCH_SIZE,
     "num_params": num_params,
 })
+
+
+@torch.no_grad()
+def quick_eval():
+    """Cheap single-batch val check (loss/top1/top5) for wandb charts — not the final val_bpb metric."""
+    model.eval()
+    x_val, y_val, _ = next(val_loader)
+    logits = model(x_val)
+    targets_flat = y_val.view(-1)
+    mask = targets_flat != config.pad_token_id
+    loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets_flat, ignore_index=config.pad_token_id)
+    top5 = logits.view(-1, logits.size(-1)).topk(5, dim=-1).indices
+    top1_correct = (top5[:, 0] == targets_flat) & mask
+    top5_correct = (top5 == targets_flat.unsqueeze(-1)).any(dim=-1) & mask
+    model.train()
+    return loss.item(), (top1_correct.sum() / mask.sum()).item(), (top5_correct.sum() / mask.sum()).item()
 
 # ---------------------------------------------------------------------------
 # Training loop
@@ -141,7 +159,7 @@ while True:
     loss.backward()
     x, y, epoch = next(train_loader)
 
-    torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
+    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
     optimizer.step()
     model.zero_grad(set_to_none=True)
 
@@ -163,7 +181,12 @@ while True:
     remaining = max(0, TIME_BUDGET - total_training_time)
 
     print(f"\rstep {step:05d} ({pct_done:.1f}%) | loss: {train_loss_f:.6f} | dt: {dt*1000:.0f}ms | tok/sec: {tok_per_sec:,} | epoch: {epoch} | remaining: {remaining:.0f}s    ", end="", flush=True)
-    wandb.log({"loss": train_loss_f, "tok_per_sec": tok_per_sec, "epoch": epoch}, step=step)
+    log = {"loss": train_loss_f, "tok_per_sec": tok_per_sec, "epoch": epoch,
+           "grad_norm": grad_norm.item(), "lr": optimizer.param_groups[0]["lr"]}
+    if step % EVAL_EVERY == 0:
+        val_loss, top1_acc, top5_acc = quick_eval()
+        log.update({"val_loss": val_loss, "top1_acc": top1_acc, "top5_acc": top5_acc})
+    wandb.log(log, step=step)
 
     step += 1
 
@@ -176,6 +199,7 @@ print()  # newline after \r training log
 # Final eval
 model.eval()
 val_bpb = evaluate_bpb(model, tokenizer, BATCH_SIZE, device)
+_, final_top1_acc, final_top5_acc = quick_eval()
 
 # Final summary
 t_end = time.time()
@@ -188,6 +212,8 @@ else:
 
 print("---")
 print(f"val_bpb:          {val_bpb:.6f}")
+print(f"top1_acc:         {final_top1_acc:.4f}")
+print(f"top5_acc:         {final_top5_acc:.4f}")
 print(f"training_seconds: {total_training_time:.1f}")
 print(f"total_seconds:    {t_end - t_start:.1f}")
 print(f"peak_vram_mb:     {peak_vram_mb:.1f}")
@@ -197,5 +223,6 @@ print(f"num_params_M:     {num_params / 1e6:.3f}")
 print(f"num_layers:       {NUM_LAYERS}")
 print(f"hidden_size:      {HIDDEN_SIZE}")
 
-wandb.log({"val_bpb": val_bpb, "peak_vram_mb": peak_vram_mb, "total_tokens_M": total_tokens / 1e6})
+wandb.log({"val_bpb": val_bpb, "top1_acc": final_top1_acc, "top5_acc": final_top5_acc,
+           "peak_vram_mb": peak_vram_mb, "total_tokens_M": total_tokens / 1e6})
 wandb.finish()
