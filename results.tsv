@@ -13,3 +13,4 @@ bcba215	1.402730	0.6804	0.9309	1.4	1781	116.0	0.960	discard	WINDOW_BATCH_SIZE 12
 0959fb6	1.386632	0.6869	0.9301	0.8	9406	307.9	0.290	keep	WEIGHT_DECAY 0.0->0.05 isolated re-test (human steer) -- marginal new best, within noise but no complexity cost either way
 b4e13aa	1.375155	0.6994	0.9395	0.8	9284	303.9	0.290	keep	DROPOUT 0.0->0.1, the one LSTM-allowed check (human steer) -- new best, clean win across val_bpb/top1/top5, unlike RNN where it failed 4x
 c255ddc	1.340972	0.7009	0.9399	0.7	3609	117.9	0.960	keep-prov	HIDDEN_SIZE=256 + TRAIN_SEQ_LEN=128 (own idea, throughput-matched retest w/ wd=0.05+dropout=0.1) -- best val_bpb yet but tokens_M still only 38% of median, throughput lever failed again
+c4fde9b	1.408745	0.6910	0.9357	0.9	7735	253.1	0.368	discard	EMBED_SIZE 128->256 isolated re-test (own idea) -- worse, unlike RNN where it helped; hidden=128 doesn't need the extra embed capacity
