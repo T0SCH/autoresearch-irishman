@@ -14,7 +14,7 @@ To set up a new experiment, work with the user to:
    - `prepare.py` — fixed constants, IrishMAN data download, char-level tokenizer, dataloader, evaluation. Do not modify.
    - `train.py` — the file you modify. RNN model (`CharRNN`), optimizer, training loop.
 4. **Verify data exists**: Check that `~/.cache/autoresearch/` contains the IrishMAN data and a tokenizer. If not, tell the human to run `uv run prepare.py`.
-5. **Initialize results.tsv**: Create `results.tsv` with just the header row. The baseline will be recorded after the first run.
+5. **Initialize results.tsv**: Create `results.tsv` with just the header row and commit it (tracked, not gitignored — we run on ephemeral cloud VMs, so the ledger needs to survive disconnects the same way the code does). The baseline will be recorded after the first run.
 6. **Confirm and go**: Confirm setup looks good.
 
 Once you get confirmation, kick off the experimentation.
@@ -108,7 +108,7 @@ LOOP FOREVER:
 4. Run the experiment: `uv run train.py > run.log 2>&1` (redirect everything — do NOT use tee or let output flood your context)
 5. Read out the results: `grep "^val_bpb:\|^peak_vram_mb:" run.log`
 6. If the grep output is empty, the run crashed. Run `tail -n 50 run.log` to read the Python stack trace and attempt a fix. If you can't get things to work after more than a few attempts, give up.
-7. Record the results in the tsv (NOTE: do not commit the results.tsv file, leave it untracked by git)
+7. Record the results in the tsv, and `git add results.tsv` along with it — unlike the original upstream design, we run on ephemeral cloud VMs that can disconnect anytime, so the ledger needs the same push-on-keep protection as the code (see step 8). Amend it into the same commit rather than creating a separate one.
 8. If val_bpb improved (lower), you "advance" the branch, keeping the git commit — then `git push origin <branch>` (`-u` on the first push). The machine running training may be ephemeral (e.g. a cloud/Colab VM); anything not pushed is lost the moment the session dies, only the pushed history survives.
 9. If val_bpb is equal or worse, you git reset back to where you started — nothing to push, the commit never left local history
 
