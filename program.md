@@ -76,26 +76,30 @@ grep "^val_bpb:" run.log
 
 Two files record every attempt, kept or not: `results.tsv` (terse, machine-parseable table) and `experiment_log.md` (narrative log with more detail). Both are tracked in git — see "Committing the ledger" below for why they need their own commit, separate from the experimental code commit.
 
-`results.tsv` is tab-separated, NOT comma-separated (commas break in descriptions). Header row and 5 columns:
+`results.tsv` is tab-separated, NOT comma-separated (commas break in descriptions). Header row and 7 columns:
 
 ```
-commit	val_bpb	memory_gb	status	description
+commit	val_bpb	memory_gb	num_steps	tokens_M	status	description
 ```
 
 1. git commit hash (short, 7 chars) — the code commit this row describes, even if that commit was later reset away (see below)
 2. val_bpb achieved (e.g. 1.234567) — use 0.000000 for crashes
 3. peak memory in GB, round to .1f (e.g. 12.3 — divide peak_vram_mb by 1024) — use 0.0 for crashes
-4. status: `keep`, `discard`, or `crash`
-5. short text description of what this experiment tried
+4. num_steps — from train.py's final printout, use 0 for crashes
+5. tokens_M — total_tokens_M from train.py's final printout, use 0.0 for crashes
+6. status: `keep`, `discard`, or `crash`
+7. short text description of what this experiment tried
+
+Columns 4/5 exist because TIME_BUDGET is fixed (300s), not step count — two runs can differ hugely in how much data they saw in that window (e.g. a slower architecture might do 1000 steps where a faster one does 8000). A val_bpb "win" from a run that saw far fewer tokens may just be less overfitting from less exposure, not a real improvement — sanity-check num_steps/tokens_M before trusting a close comparison, and mention this caveat in the one-pager if a kept change relied on one.
 
 Example:
 
 ```
-commit	val_bpb	memory_gb	status	description
-a1b2c3d	0.997900	1.0	keep	baseline
-b2c3d4e	0.993200	1.0	keep	increase hidden_size to 512
-c3d4e5f	1.005000	1.0	discard	switch optimizer to SGD
-d4e5f6g	0.000000	0.0	crash	hidden_size 4096 (OOM)
+commit	val_bpb	memory_gb	num_steps	tokens_M	status	description
+a1b2c3d	0.997900	1.0	8000	410.0	keep	baseline
+b2c3d4e	0.993200	1.0	1100	55.0	keep	increase hidden_size to 512
+c3d4e5f	1.005000	1.0	8000	410.0	discard	switch optimizer to SGD
+d4e5f6g	0.000000	0.0	0	0.0	crash	hidden_size 4096 (OOM)
 ```
 
 `experiment_log.md` is one entry per experiment, appended (never edited/rewritten), most recent last:
