@@ -26,3 +26,4 @@ ff1eb40	1.614071	1.4	1400	41.4	keep	TOKEN_BUDGET 16384->32768, marginal new best
 cf3c7b9	1.526216	1.4	1463	47.6	keep	truncated-BPTT windowed dataloader (human idea, seq_len=64), replaces bucketing, biggest win yet
 86ed92e	1.562154	1.5	1458	47.4	discard	TRAIN_SEQ_LEN 64->32 (tokens/step held constant), worse -- 32 too short
 928e2a9	1.551335	1.4	1456	47.3	discard	TRAIN_SEQ_LEN 64->128 (tokens/step held constant), worse -- 64 brackets as local optimum
+fec4724	1.530929	1.4	1456	47.3	discard	stateful truncated-BPTT (carry hidden state across windows), essentially a wash vs stateless
