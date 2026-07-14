@@ -195,3 +195,9 @@ One entry per experiment (kept, discarded, or crashed), appended by the loop's l
 **Change:** `LEARNING_RATE` 0.0015 → 0.003, nothing else, on top of the settled windowed-loader best.
 **Result:** val_bpb 1.534946 (worse than 1.526216), memory 1.4GB, num_steps 1474
 **Notes:** Discard, but notably the gap is much smaller than the old whole-tune-regime bracket suggested (back then 0.003 was badly worse than 0.0015; here it's close). Consistent with the human's own hypothesis about the gradient statistics shifting — the LR landscape really did flatten/shift, just not enough to make 0.003 the new optimum. Per the human's branching instructions: since this discarded, run 32 is `LEARNING_RATE=0.002` (a more cautious intermediate step between 0.0015 and 0.003).
+
+## 6b177dd — discard
+**Source:** human (idea via `human_input.md`, run-32 branch: discard-path follow-up to run 31)
+**Change:** `LEARNING_RATE` 0.0015 → 0.002.
+**Result:** val_bpb 1.527844 (vs. 1.526216 — a difference of ~0.0016, essentially within run-to-run noise), memory 1.4GB, num_steps 1462
+**Notes:** Confirms the LR landscape around the current best is very flat: 0.0015 and 0.002 are statistically indistinguishable, while 0.003 (run 31, 1.534946) is measurably worse. The optimum sits somewhere in a narrow band around 0.0015–0.002, not sharply at one point. `grad_norm` at the end of this run was ~0.23 (well below the `GRAD_CLIP=1.0` threshold, only spiking in the first few warmup steps per the logged sparkline) — clipping is not regularly binding, which argues against the "clip=1.0 is a hidden LR brake" hypothesis. Testing `GRAD_CLIP=5.0` anyway for run 33 (cheap, and settles the question definitively rather than leaving it as an open guess) rather than further LR micro-tuning in an already-flat region.
