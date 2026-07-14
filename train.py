@@ -130,8 +130,9 @@ WARMUP_STEPS = 20          # linear warmup, then cosine decay over the wall-cloc
 
 BATCH_SIZE = 32            # only used for the val_loader/evaluate_bpb (fixed-batch, must stay
                            # comparable across configs) -- training uses TOKEN_BUDGET below instead
-TOKEN_BUDGET = 16384       # length-bucketed training batches: pack items until items*max_len_in_bucket
-                           # hits this -- doubled from 8192 to check the other direction (4096 hurt)
+TOKEN_BUDGET = 32768       # length-bucketed training batches: pack items until items*max_len_in_bucket
+                           # hits this -- doubled again from 16384, which beat 8192; testing if the
+                           # larger-less-noisy-batch trend continues before calling it settled
 MAX_BUCKET_ITEMS = 128     # cap so very-short-tune buckets don't get absurdly large
 EVAL_EVERY = 50            # steps between quick val checks (loss/top1/top5) for wandb charts
 
