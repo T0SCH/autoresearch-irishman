@@ -148,7 +148,10 @@ DROPOUT = 0.0             # helps once training does multiple epochs (confirmed 
 # in isolation and found it a wash vs. whole-tune; this changes exactly one more thing --
 # carrying (h,c) across a tune's windows -- on top of that).
 LEARNING_RATE = 0.003
-WEIGHT_DECAY = 0.0
+WEIGHT_DECAY = 0.05        # human steer: isolated re-test -- never tested alone on the LSTM (only in
+                           # 5fc6b30's 5-variable bundle). At ~0.29M params with multiple epochs of
+                           # exposure (9000+ steps), more plausible as a real regularizer here than
+                           # it would have been on a much smaller/undertrained early run.
 GRAD_CLIP = 1.0            # RNNs are prone to exploding gradients, clip by global norm
 
 BATCH_SIZE = 64            # only used for the val_loader/evaluate_bpb (fixed-batch, must stay
