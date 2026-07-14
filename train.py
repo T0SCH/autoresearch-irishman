@@ -153,12 +153,12 @@ GRAD_CLIP = 1.0            # RNNs are prone to exploding gradients, clip by glob
 
 BATCH_SIZE = 64            # only used for the val_loader/evaluate_bpb (fixed-batch, must stay
                            # comparable across configs) -- training uses the stateful windowed loader below
-TRAIN_SEQ_LEN = 512        # bracketing further: 128->256 was a marginal win, testing whether the
-                           # trend continues or turns over (median tune ~258 tokens, so 512 already
-                           # exceeds a typical whole tune -- stateful carry across tune boundaries
-                           # becomes the dominant case rather than within-tune window continuation)
-WINDOW_BATCH_SIZE = 64     # halved again vs. seq_len=256's 128 to hold batch_size*seq_len ~= 32768
-                           # constant, isolating window length from total tokens/step
+TRAIN_SEQ_LEN = 256        # truncated-BPTT window length; doubled from the confirmed-keep 128 now
+                           # that stateful carry works, to see whether a longer single BPTT horizon
+                           # (fewer, bigger windows/tune) helps further or whether 128 already captured
+                           # most of the benefit
+WINDOW_BATCH_SIZE = 128    # halved vs. seq_len=128's 256 to hold batch_size*seq_len ~= 32768 constant,
+                           # isolating window length from total tokens/step
 EVAL_EVERY = 50            # steps between quick val checks (loss/top1/top5) for wandb charts
 
 SAVE_CHECKPOINT = False    # off by default -- every kept experiment would otherwise add a multi-MB
