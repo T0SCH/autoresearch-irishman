@@ -75,3 +75,9 @@ One entry per experiment (kept, discarded, or crashed), appended by the loop's l
 **Change:** `HIDDEN_SIZE` 1024 → 1280 (midpoint), trying to narrow the sweet spot between 1024's win and 1536's overshoot.
 **Result:** val_bpb 2.007747 (worse than 1.722063), memory 3.1GB, 589 steps / 29.8M tokens (vs. 1024's 844 / 43.1M)
 **Notes:** Surprisingly bad already — top1_acc 0.5625, closer to the 1536 failure (0.5368) than to 1024's 0.6201. The capacity curve falls off much faster right above 1024 than expected; 1024 isn't just "near the peak," it looks like it's sitting right at a fairly sharp optimum for this time budget/throughput regime. Not narrowing further (e.g. 1152) — treating hidden_size=1024 as settled and moving to other levers: this model is now much bigger than when weight_decay=0.01/LR schedule were tuned at hidden_size=384, so those may be worth revisiting, plus batch size, embed_size, and architectural tweaks (residual connections).
+
+## 3f4ea49 — keep
+**Source:** agent
+**Change:** `WEIGHT_DECAY` 0.01 → 0.05 on top of hidden_size=1024 + learned h0 + LR warmup/cosine. 0.01 was originally tuned at hidden_size=384 (0.543M params); model is now 3.396M params (~6x).
+**Result:** val_bpb 1.712790 (down from 1.722063), memory 2.5GB, throughput unchanged (43.1M tokens / 843 steps)
+**Notes:** Small further improvement, confirming that the earlier weight_decay tuning didn't fully transfer to the larger model — makes sense since AdamW's decoupled decay scales with parameter count/norm, a fixed decay coefficient regularizes a 6x-bigger model relatively less unless increased to match. New best: val_bpb 1.712790.

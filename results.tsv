@@ -11,3 +11,4 @@ aa5f65e	1.833008	2.1	709	36.0	discard	NUM_LAYERS 2->3 on current best base, wors
 cfd7f13	1.722063	2.5	844	43.1	keep	hidden_size 384->1024 (human idea: probe cuDNN cliff), new best
 54058d8	2.176296	3.7	468	23.5	discard	hidden_size 1024->1536, severely undertrained (468 steps), trend reversed
 402716f	2.007747	3.1	589	29.8	discard	hidden_size 1024->1280, worse than 1024, capacity curve falls off fast
+3f4ea49	1.712790	2.5	843	43.1	keep	weight_decay 0.01->0.05 at hidden_size=1024, new best
