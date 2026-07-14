@@ -16,3 +16,4 @@ cfd7f13	1.722063	2.5	844	43.1	keep	hidden_size 384->1024 (human idea: probe cuDN
 b1b2d1e	1.690385	1.4	1554	35.1	keep	batch_size 64->32 at hidden_size=1024 (human idea: update-limited not data-limited), new best
 d1a3c35	0.000000	0.0	0	0.0	crash	IRNN recipe (relu + identity-init weight_hh) at hidden_size=1024, loss exploded/NaN on first step(s)
 e3f05ed	1.753826	0.7	2573	25.0	discard	batch_size 32->16, worse despite more steps -- gradient noise outweighs update-count benefit
+c30583f	0.000000	0.0	0	0.0	crash	IRNN recipe retry at LR=0.0003 (10x lower), still exploded -- rules out LR as the cause
