@@ -64,7 +64,7 @@ class CharRNN(nn.Module):
 RNN_TYPE = "lstm"  # not a hyperparameter — set per worktree to tag the architecture family in
                           # wandb (rnn/lstm/gru/birnn); the agent updates this when it swaps the recurrent cell
 EMBED_SIZE = 128
-HIDDEN_SIZE = 256
+HIDDEN_SIZE = 128
 NUM_LAYERS = 2
 DROPOUT = 0.0             # helps once training does multiple epochs (confirmed on a fast GPU: 3 epochs
                           # in 300s overfits without it); on slower hardware a run may not even finish one
