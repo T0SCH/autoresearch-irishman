@@ -28,3 +28,4 @@ cf3c7b9	1.526216	1.4	1463	47.6	keep	truncated-BPTT windowed dataloader (human id
 928e2a9	1.551335	1.4	1456	47.3	discard	TRAIN_SEQ_LEN 64->128 (tokens/step held constant), worse -- 64 brackets as local optimum
 fec4724	1.530929	1.4	1456	47.3	discard	stateful truncated-BPTT (carry hidden state across windows), essentially a wash vs stateless
 94ab015	1.594133	2.1	719	23.2	discard	hidden_size 1024->1536 re-test under windowed loader, worse but not catastrophic (vs old whole-tune failure)
+a6b15da	1.552942	1.4	1429	46.5	discard	dropout=0.1 retry under windowed loader (4th attempt), still hurts
