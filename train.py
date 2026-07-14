@@ -71,7 +71,7 @@ DROPOUT = 0.0             # helps once training does multiple epochs (confirmed 
 
 # Optimization
 LEARNING_RATE = 0.003
-WEIGHT_DECAY = 0.01
+WEIGHT_DECAY = 0.05
 GRAD_CLIP = 1.0            # RNNs are prone to exploding gradients, clip by global norm
 WARMUP_STEPS = 20          # linear warmup, then cosine decay over the wall-clock time budget
                            # (time-based, not step-based -- step count varies a lot across configs)
