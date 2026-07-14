@@ -72,15 +72,15 @@ grep "^val_bpb:" run.log
 
 ## Logging results
 
-When an experiment is done, log it to `results.tsv` (tab-separated, NOT comma-separated — commas break in descriptions).
+Two files record every attempt, kept or not: `results.tsv` (terse, machine-parseable table) and `experiment_log.md` (narrative log with more detail). Both are tracked in git — see "Committing the ledger" below for why they need their own commit, separate from the experimental code commit.
 
-The TSV has a header row and 5 columns:
+`results.tsv` is tab-separated, NOT comma-separated (commas break in descriptions). Header row and 5 columns:
 
 ```
 commit	val_bpb	memory_gb	status	description
 ```
 
-1. git commit hash (short, 7 chars)
+1. git commit hash (short, 7 chars) — the code commit this row describes, even if that commit was later reset away (see below)
 2. val_bpb achieved (e.g. 1.234567) — use 0.000000 for crashes
 3. peak memory in GB, round to .1f (e.g. 12.3 — divide peak_vram_mb by 1024) — use 0.0 for crashes
 4. status: `keep`, `discard`, or `crash`
@@ -96,6 +96,18 @@ c3d4e5f	1.005000	1.0	discard	switch optimizer to SGD
 d4e5f6g	0.000000	0.0	crash	hidden_size 4096 (OOM)
 ```
 
+`experiment_log.md` is one entry per experiment, appended (never edited/rewritten), most recent last:
+
+```
+## <commit-hash> — <status>
+**Source:** agent | human (<one-line summary of what the human asked for, if this experiment came from `human_input.md`>)
+**Change:** what in train.py went from what to what
+**Result:** val_bpb <value>, memory <value>GB
+**Notes:** anything worth remembering — why it did/didn't work, if known
+```
+
+`Source` matters for the write-up (which ideas were the agent's own vs. steered by the human). Until the `human_input.md` mailbox exists, this is always `agent`.
+
 ## The experiment loop
 
 The experiment runs on a dedicated branch (e.g. `autoresearch/mar5` or `autoresearch/mar5-gpu0`).
@@ -104,13 +116,22 @@ LOOP FOREVER:
 
 1. Look at the git state: the current branch/commit we're on
 2. Tune `train.py` with an experimental idea by directly hacking the code.
-3. git commit
+3. git commit (train.py only — not the ledger files, they come later, see step 7)
 4. Run the experiment: `uv run train.py > run.log 2>&1` (redirect everything — do NOT use tee or let output flood your context)
 5. Read out the results: `grep "^val_bpb:\|^peak_vram_mb:" run.log`
 6. If the grep output is empty, the run crashed. Run `tail -n 50 run.log` to read the Python stack trace and attempt a fix. If you can't get things to work after more than a few attempts, give up.
-7. Record the results in the tsv, and `git add results.tsv` along with it — unlike the original upstream design, we run on ephemeral cloud VMs that can disconnect anytime, so the ledger needs the same push-on-keep protection as the code (see step 8). Amend it into the same commit rather than creating a separate one.
-8. If val_bpb improved (lower), you "advance" the branch, keeping the git commit — then `git push origin <branch>` (`-u` on the first push). The machine running training may be ephemeral (e.g. a cloud/Colab VM); anything not pushed is lost the moment the session dies, only the pushed history survives.
-9. If val_bpb is equal or worse, you git reset back to where you started — nothing to push, the commit never left local history
+7. Decide keep or discard/crash, then act in this order:
+   - **Keep**: leave the step-3 commit in place. `git push origin <branch>` (`-u` on the first push).
+   - **Discard or crash**: `git reset --hard` back to the commit from before step 3 — this throws away the train.py change, on purpose.
+   - **Either way, now append to `results.tsv` and `experiment_log.md`** describing what just happened, and commit *only these two files* as a fresh commit on top of wherever HEAD ended up (the kept train.py commit, or the clean pre-experiment state after a reset). Push this commit too.
+
+### Committing the ledger separately (why step 7 is ordered this way)
+
+The ledger commit must never be bundled into the step-3 experimental commit, and must always happen *after* the keep/discard decision — otherwise a discard's `git reset --hard` deletes its own ledger entry along with the code, and you lose the record that the attempt ever happened. Committing the ledger update as its own commit, always last, means:
+- A **kept** experiment: two commits land — the code change, then the ledger update.
+- A **discarded/crashed** experiment: the code commit is reset away entirely; only the ledger commit survives, so `results.tsv`/`experiment_log.md` still show the attempt even though train.py itself shows no trace of it.
+
+Both cases push, so the ledger survives disconnects the same way kept code does (we run on ephemeral cloud VMs — see the push note in step 7).
 
 The idea is that you are a completely autonomous researcher trying things out. If they work, keep. If they don't, discard. And you're advancing the branch so that you can iterate. If you feel like you're getting stuck in some way, you can rewind but you should probably do this very very sparingly (if ever).
 
