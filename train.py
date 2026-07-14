@@ -6,7 +6,7 @@ Usage: uv run train.py
 
 import math
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 import torch
 import torch.nn as nn
@@ -74,6 +74,9 @@ GRAD_CLIP = 1.0            # RNNs are prone to exploding gradients, clip by glob
 
 BATCH_SIZE = 64            # reduce if OOM
 EVAL_EVERY = 50            # steps between quick val checks (loss/top1/top5) for wandb charts
+
+SAVE_CHECKPOINT = False    # off by default -- every kept experiment would otherwise add a multi-MB
+                           # blob to git history. Flip to True only for the one deliberate final run.
 
 # ---------------------------------------------------------------------------
 # Setup: tokenizer, model, optimizer, dataloader
@@ -226,3 +229,7 @@ print(f"hidden_size:      {HIDDEN_SIZE}")
 wandb.log({"val_bpb": val_bpb, "top1_acc": final_top1_acc, "top5_acc": final_top5_acc,
            "peak_vram_mb": peak_vram_mb, "total_tokens_M": total_tokens / 1e6})
 wandb.finish()
+
+if SAVE_CHECKPOINT:
+    torch.save({"model_state_dict": model.state_dict(), "config": asdict(config)}, "checkpoint.pt")
+    print("Saved checkpoint.pt (git add + commit it manually -- this is a deliberate one-off, not part of the loop)")
