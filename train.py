@@ -76,7 +76,7 @@ GRAD_CLIP = 1.0            # RNNs are prone to exploding gradients, clip by glob
 WARMUP_STEPS = 20          # linear warmup, then cosine decay over the wall-clock time budget
                            # (time-based, not step-based -- step count varies a lot across configs)
 
-BATCH_SIZE = 64            # reduce if OOM
+BATCH_SIZE = 32            # reduce if OOM
 EVAL_EVERY = 50            # steps between quick val checks (loss/top1/top5) for wandb charts
 
 SAVE_CHECKPOINT = False    # off by default -- every kept experiment would otherwise add a multi-MB
