@@ -21,3 +21,6 @@ dev/
 
 # Results file
 results.tsv
+
+# Local wandb offline-run logs
+wandb/
