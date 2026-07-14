@@ -128,7 +128,7 @@ LOOP FOREVER:
 1. Look at the git state: the current branch/commit we're on
 2. Tune `train.py` with an experimental idea by directly hacking the code.
 3. git commit (train.py only — not the ledger files, they come later, see step 8)
-4. Run the experiment: `uv run train.py > run.log 2>&1` (redirect everything — do NOT use tee or let output flood your context)
+4. Run the experiment in the background, don't block on it: `uv run train.py > run.log 2>&1 &` (or your environment's background-execution mechanism for Bash) — redirect to a file, do NOT use `tee` or otherwise stream the output, that floods your context for no benefit. Don't poll it every few seconds either, same reason: the budget is fixed at 5 minutes plus a few seconds of startup/eval overhead, so there's nothing to gain from checking early. Either use whatever "notify me when this finishes" / scheduled-wakeup mechanism your environment offers, or a single check-back around the 05:10 mark. If your environment gives you idle time while it runs, that's fine to spend thinking about the *next* experiment, not on watching this one.
 5. Sync wandb, regardless of what step 4 did — offline runs live under `wandb/offline-run-*` and are otherwise as ephemeral as the VM itself (unlike the ledger, `wandb/` is gitignored, nothing protects it from a disconnect). Attempt each not-yet-synced run individually, with a timeout so a stuck sync can't stall the loop the way the HF Xet hang once did:
    ```bash
    for d in wandb/offline-run-*; do
