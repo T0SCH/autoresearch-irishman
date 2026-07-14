@@ -21,9 +21,9 @@ import torch
 # Constants (fixed, do not modify)
 # ---------------------------------------------------------------------------
 
-MAX_SEQ_LEN = 1024        # context length (covers ~99% of tunes uncropped, p99=813 chars)
+MAX_SEQ_LEN = 1024        # max context length (covers ~99% of tunes uncropped, p99=813 chars)
 TIME_BUDGET = 300         # training time budget in seconds (5 minutes)
-EVAL_TOKENS = 500_000     # number of tokens for val eval (~most of the 2162-tune val set)
+EVAL_TOKENS = 500_000     # approx. number of tokens for val eval (~most of the 2162-tune val set)
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -39,6 +39,7 @@ ABC_FIELD = "abc notation"  # the field in each record holding the tune text
 
 BOS_TOKEN = "<BOS>"
 UNK_TOKEN = "<UNK>"
+PAD_TOKEN = "<PAD>"
 
 # ---------------------------------------------------------------------------
 # Data download
@@ -122,11 +123,11 @@ def train_tokenizer():
     print(f"Tokenizer: found {len(chars)} unique characters")
 
     with open(vocab_path, "w") as f:
-        json.dump({"chars": chars, "bos_token": BOS_TOKEN, "unk_token": UNK_TOKEN}, f)
+        json.dump({"chars": chars, "bos_token": BOS_TOKEN, "unk_token": UNK_TOKEN, "pad_token": PAD_TOKEN}, f)
     print(f"Tokenizer: saved vocab to {vocab_path}")
 
-    # token_bytes: byte length per token id, for BPB eval. Specials (BOS, UNK) are 0.
-    token_bytes_list = [len(c.encode("utf-8")) for c in chars] + [0, 0]
+    # token_bytes: byte length per token id, for BPB eval. Specials (BOS, UNK, PAD) are 0.
+    token_bytes_list = [len(c.encode("utf-8")) for c in chars] + [0, 0, 0]
     torch.save(torch.tensor(token_bytes_list, dtype=torch.int32), token_bytes_path)
     print(f"Tokenizer: saved token_bytes to {token_bytes_path}")
 
@@ -141,19 +142,20 @@ def train_tokenizer():
 # ---------------------------------------------------------------------------
 
 class Tokenizer:
-    """Char-level tokenizer. One token id per character, plus BOS/UNK. Training is handled above."""
+    """Char-level tokenizer. One token id per character, plus BOS/UNK/PAD. Training is handled above."""
 
-    def __init__(self, chars, bos_token, unk_token):
+    def __init__(self, chars, bos_token, unk_token, pad_token):
         self.char_to_id = {c: i for i, c in enumerate(chars)}
-        self.id_to_char = list(chars) + [bos_token, unk_token]
+        self.id_to_char = list(chars) + [bos_token, unk_token, pad_token]
         self.bos_token_id = len(chars)
         self.unk_token_id = len(chars) + 1
+        self.pad_token_id = len(chars) + 2
 
     @classmethod
     def from_directory(cls, tokenizer_dir=TOKENIZER_DIR):
         with open(os.path.join(tokenizer_dir, "vocab.json")) as f:
             vocab = json.load(f)
-        return cls(vocab["chars"], vocab["bos_token"], vocab["unk_token"])
+        return cls(vocab["chars"], vocab["bos_token"], vocab["unk_token"], vocab["pad_token"])
 
     def get_vocab_size(self):
         return len(self.id_to_char)
@@ -161,21 +163,13 @@ class Tokenizer:
     def get_bos_token_id(self):
         return self.bos_token_id
 
-    def _encode_one(self, text):
-        return [self.char_to_id.get(c, self.unk_token_id) for c in text]
+    def get_pad_token_id(self):
+        return self.pad_token_id
 
     def encode(self, text, prepend=None):
-        if isinstance(text, str):
-            ids = self._encode_one(text)
-            if prepend is not None:
-                ids.insert(0, prepend)
-        elif isinstance(text, list):
-            ids = [self._encode_one(t) for t in text]
-            if prepend is not None:
-                for row in ids:
-                    row.insert(0, prepend)
-        else:
-            raise ValueError(f"Invalid input type: {type(text)}")
+        ids = [self.char_to_id.get(c, self.unk_token_id) for c in text]
+        if prepend is not None:
+            ids.insert(0, prepend)
         return ids
 
     def decode(self, ids):
@@ -188,79 +182,34 @@ def get_token_bytes(device="cpu"):
         return torch.load(f, map_location=device)
 
 
-def _document_batches(split, tokenizer_batch_size=128):
-    """Infinite iterator over document batches from the loaded tune list."""
-    tunes = load_tunes(split)
-    assert len(tunes) > 0, f"No tunes found for split={split}. Run prepare.py first."
-    epoch = 1
-    while True:
-        for i in range(0, len(tunes), tokenizer_batch_size):
-            yield tunes[i:i + tokenizer_batch_size], epoch
-        epoch += 1
-
-
-def make_dataloader(tokenizer, B, T, split, device, buffer_size=1000):
+def make_dataloader(tokenizer, B, T, split, device):
     """
-    BOS-aligned dataloader with best-fit packing.
-    Every row starts with BOS. Documents packed using best-fit to minimize cropping.
-    When no document fits remaining space, crops shortest doc to fill exactly.
-    100% utilization (no padding).
+    Each row is one BOS-prefixed tune, cropped to at most T+1 tokens.
+    Rows are padded with PAD up to the longest tune in the batch (not always T)
+    PAD positions carry zero byte-length, so evaluate_bpb and the training loss
+    (ignore_index=pad_token_id) both skip them automatically.
     """
     assert split in ["train", "val"]
-    row_capacity = T + 1
-    batches = _document_batches(split)
-    bos_token = tokenizer.get_bos_token_id()
-    doc_buffer = []
+    tunes = load_tunes(split)
+    assert len(tunes) > 0, f"No tunes found for split={split}. Run prepare.py first."
+    bos, pad = tokenizer.get_bos_token_id(), tokenizer.get_pad_token_id()
     epoch = 1
-
-    def refill_buffer():
-        nonlocal epoch
-        doc_batch, epoch = next(batches)
-        token_lists = tokenizer.encode(doc_batch, prepend=bos_token)
-        doc_buffer.extend(token_lists)
-
-    # Pre-allocate buffers: [inputs (B*T) | targets (B*T)]
-    row_buffer = torch.empty((B, row_capacity), dtype=torch.long)
-    cpu_buffer = torch.empty(2 * B * T, dtype=torch.long, pin_memory=(device.type == "cuda"))
-    gpu_buffer = torch.empty(2 * B * T, dtype=torch.long, device=device)
-    cpu_inputs = cpu_buffer[:B * T].view(B, T)
-    cpu_targets = cpu_buffer[B * T:].view(B, T)
-    inputs = gpu_buffer[:B * T].view(B, T)
-    targets = gpu_buffer[B * T:].view(B, T)
+    i = 0
 
     while True:
-        for row_idx in range(B):
-            pos = 0
-            while pos < row_capacity:
-                while len(doc_buffer) < buffer_size:
-                    refill_buffer()
+        rows = []
+        for _ in range(B):
+            if i >= len(tunes):
+                i, epoch = 0, epoch + 1
+            rows.append(tokenizer.encode(tunes[i], prepend=bos)[:T + 1])
+            i += 1
 
-                remaining = row_capacity - pos
+        width = max(len(row) for row in rows)
+        for row in rows:
+            row.extend([pad] * (width - len(row)))
 
-                # Find largest doc that fits entirely
-                best_idx = -1
-                best_len = 0
-                for i, doc in enumerate(doc_buffer):
-                    doc_len = len(doc)
-                    if doc_len <= remaining and doc_len > best_len:
-                        best_idx = i
-                        best_len = doc_len
-
-                if best_idx >= 0:
-                    doc = doc_buffer.pop(best_idx)
-                    row_buffer[row_idx, pos:pos + len(doc)] = torch.tensor(doc, dtype=torch.long)
-                    pos += len(doc)
-                else:
-                    # No doc fits — crop shortest to fill remaining
-                    shortest_idx = min(range(len(doc_buffer)), key=lambda i: len(doc_buffer[i]))
-                    doc = doc_buffer.pop(shortest_idx)
-                    row_buffer[row_idx, pos:pos + remaining] = torch.tensor(doc[:remaining], dtype=torch.long)
-                    pos += remaining
-
-        cpu_inputs.copy_(row_buffer[:, :-1])
-        cpu_targets.copy_(row_buffer[:, 1:])
-        gpu_buffer.copy_(cpu_buffer, non_blocking=True)
-        yield inputs, targets, epoch
+        batch = torch.tensor(rows, dtype=torch.long).to(device)
+        yield batch[:, :-1].contiguous(), batch[:, 1:].contiguous(), epoch
 
 # ---------------------------------------------------------------------------
 # Evaluation (DO NOT CHANGE — this is the fixed metric)

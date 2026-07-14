@@ -1,13 +1,9 @@
 """
-Autoresearch training script: char-level LSTM for Irish tune (ABC notation) generation.
+Autoresearch training script: char-level RNN for Irish tune (ABC notation) generation.
 Single-GPU, single-file.
 Usage: uv run train.py
 """
 
-import os
-os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
-
-import gc
 import math
 import time
 from dataclasses import dataclass
@@ -19,24 +15,25 @@ import torch.nn.functional as F
 from prepare import MAX_SEQ_LEN, TIME_BUDGET, Tokenizer, make_dataloader, evaluate_bpb
 
 # ---------------------------------------------------------------------------
-# LSTM model
+# RNN model
 # ---------------------------------------------------------------------------
 
 @dataclass
-class LSTMConfig:
+class RNNConfig:
     vocab_size: int = 100
     embed_size: int = 128
     hidden_size: int = 256
     num_layers: int = 2
     dropout: float = 0.2
+    pad_token_id: int = 0
 
 
-class CharLSTM(nn.Module):
+class CharRNN(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
         self.embed = nn.Embedding(config.vocab_size, config.embed_size)
-        self.lstm = nn.LSTM(
+        self.rnn = nn.RNN(
             input_size=config.embed_size,
             hidden_size=config.hidden_size,
             num_layers=config.num_layers,
@@ -48,13 +45,13 @@ class CharLSTM(nn.Module):
 
     def forward(self, idx, targets=None, reduction='mean'):
         x = self.embed(idx)
-        x, _ = self.lstm(x)  # zero-initialized hidden/cell state per batch, no state carry across steps
+        x, _ = self.rnn(x)  # zero-initialized hidden state per batch, no state carry across steps
         x = self.drop(x)
-        logits = self.head(x).float()
+        logits = self.head(x)
 
         if targets is not None:
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1),
-                                   ignore_index=-1, reduction=reduction)
+                                   ignore_index=self.config.pad_token_id, reduction=reduction)
             return loss
         return logits
 
@@ -77,9 +74,7 @@ WARMUP_RATIO = 0.0       # fraction of time budget for LR warmup
 WARMDOWN_RATIO = 0.5     # fraction of time budget for LR warmdown
 FINAL_LR_FRAC = 0.0      # final LR as fraction of initial
 
-# Batch size
-DEVICE_BATCH_SIZE = 64   # per-device batch size (reduce if OOM)
-TOTAL_BATCH_SIZE = DEVICE_BATCH_SIZE * MAX_SEQ_LEN  # no grad accumulation by default
+BATCH_SIZE = 64           # reduce if OOM
 
 # ---------------------------------------------------------------------------
 # Setup: tokenizer, model, optimizer, dataloader
@@ -101,33 +96,27 @@ elif device.type == "mps":
     torch.mps.manual_seed(42)
 print(f"Device: {device.type}")
 torch.set_float32_matmul_precision("high")
-autocast_ctx = torch.amp.autocast(device_type=device.type, dtype=torch.bfloat16)
 
 tokenizer = Tokenizer.from_directory()
 vocab_size = tokenizer.get_vocab_size()
 print(f"Vocab size: {vocab_size:,}")
 
-config = LSTMConfig(vocab_size=vocab_size, embed_size=EMBED_SIZE, hidden_size=HIDDEN_SIZE,
-                     num_layers=NUM_LAYERS, dropout=DROPOUT)
+config = RNNConfig(vocab_size=vocab_size, embed_size=EMBED_SIZE, hidden_size=HIDDEN_SIZE,
+                    num_layers=NUM_LAYERS, dropout=DROPOUT, pad_token_id=tokenizer.get_pad_token_id())
 print(f"Model config: {config}")
 
-model = CharLSTM(config).to(device)
+model = CharRNN(config).to(device)
 num_params = sum(p.numel() for p in model.parameters())
 print(f"Num params: {num_params:,}")
-
-tokens_per_fwdbwd = DEVICE_BATCH_SIZE * MAX_SEQ_LEN
-assert TOTAL_BATCH_SIZE % tokens_per_fwdbwd == 0
-grad_accum_steps = TOTAL_BATCH_SIZE // tokens_per_fwdbwd
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, betas=ADAM_BETAS, weight_decay=WEIGHT_DECAY)
 for group in optimizer.param_groups:
     group["initial_lr"] = group["lr"]
 
-train_loader = make_dataloader(tokenizer, DEVICE_BATCH_SIZE, MAX_SEQ_LEN, "train", device)
+train_loader = make_dataloader(tokenizer, BATCH_SIZE, MAX_SEQ_LEN, "train", device)
 x, y, epoch = next(train_loader)  # prefetch first batch
 
 print(f"Time budget: {TIME_BUDGET}s")
-print(f"Gradient accumulation steps: {grad_accum_steps}")
 
 # Schedule (based on progress = training_time / TIME_BUDGET)
 
@@ -144,21 +133,19 @@ def get_lr_multiplier(progress):
 # Training loop
 # ---------------------------------------------------------------------------
 
-t_start_training = time.time()
-smooth_train_loss = 0
 total_training_time = 0
+total_tokens = 0
 step = 0
 
 while True:
     sync()
     t0 = time.time()
-    for micro_step in range(grad_accum_steps):
-        with autocast_ctx:
-            loss = model(x, y)
-        train_loss = loss.detach()
-        loss = loss / grad_accum_steps
-        loss.backward()
-        x, y, epoch = next(train_loader)
+
+    loss = model(x, y)
+    train_loss_f = loss.item()
+    tokens_this_step = x.numel()
+    loss.backward()
+    x, y, epoch = next(train_loader)
 
     # LR schedule
     progress = min(total_training_time / TIME_BUDGET, 1.0)
@@ -169,8 +156,6 @@ while True:
     torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
     optimizer.step()
     model.zero_grad(set_to_none=True)
-
-    train_loss_f = train_loss.item()
 
     # Fast fail: abort if loss is exploding or NaN
     if math.isnan(train_loss_f) or train_loss_f > 100:
@@ -183,39 +168,25 @@ while True:
 
     if step > 10:
         total_training_time += dt
+        total_tokens += tokens_this_step
 
-    # Logging
-    ema_beta = 0.9
-    smooth_train_loss = ema_beta * smooth_train_loss + (1 - ema_beta) * train_loss_f
-    debiased_smooth_loss = smooth_train_loss / (1 - ema_beta**(step + 1))
     pct_done = 100 * progress
-    tok_per_sec = int(TOTAL_BATCH_SIZE / dt)
+    tok_per_sec = int(tokens_this_step / dt)
     remaining = max(0, TIME_BUDGET - total_training_time)
 
-    print(f"\rstep {step:05d} ({pct_done:.1f}%) | loss: {debiased_smooth_loss:.6f} | lrm: {lrm:.2f} | dt: {dt*1000:.0f}ms | tok/sec: {tok_per_sec:,} | epoch: {epoch} | remaining: {remaining:.0f}s    ", end="", flush=True)
-
-    # GC management (Python's GC causes ~500ms stalls)
-    if step == 0:
-        gc.collect()
-        gc.freeze()
-        gc.disable()
-    elif (step + 1) % 5000 == 0:
-        gc.collect()
+    print(f"\rstep {step:05d} ({pct_done:.1f}%) | loss: {train_loss_f:.6f} | lrm: {lrm:.2f} | dt: {dt*1000:.0f}ms | tok/sec: {tok_per_sec:,} | epoch: {epoch} | remaining: {remaining:.0f}s    ", end="", flush=True)
 
     step += 1
 
-    # Time's up — but only stop after warmup steps so we don't count compilation
+    # Time's up — but only stop after warmup steps so we don't count startup
     if step > 10 and total_training_time >= TIME_BUDGET:
         break
 
 print()  # newline after \r training log
 
-total_tokens = step * TOTAL_BATCH_SIZE
-
 # Final eval
 model.eval()
-with autocast_ctx:
-    val_bpb = evaluate_bpb(model, tokenizer, DEVICE_BATCH_SIZE, device)
+val_bpb = evaluate_bpb(model, tokenizer, BATCH_SIZE, device)
 
 # Final summary
 t_end = time.time()

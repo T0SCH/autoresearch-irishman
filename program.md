@@ -1,6 +1,6 @@
 # autoresearch
 
-This is an experiment to have the LLM do its own research. This run is scoped to a university deep learning assignment: train a char-level LSTM to generate Irish folk tunes in ABC notation (IrishMAN dataset).
+This is an experiment to have the LLM do its own research. This run is scoped to a university deep learning assignment: train a char-level RNN to generate Irish folk tunes in ABC notation (IrishMAN dataset). Baseline starts as a plain `nn.RNN` (simplest option the assignment allows) — deliberately, to see how far it gets before reaching for LSTM/GRU.
 
 ## Setup
 
@@ -12,7 +12,7 @@ To set up a new experiment, work with the user to:
    - `AUFGABENSTELLUNG.md` — the actual assignment (submission requirements, bonus points, deadline). The autoresearch loop below only covers the training/architecture-search part of it, not evaluation notebooks or the write-up.
    - `README.md` — repository context.
    - `prepare.py` — fixed constants, IrishMAN data download, char-level tokenizer, dataloader, evaluation. Do not modify.
-   - `train.py` — the file you modify. LSTM model (`CharLSTM`), optimizer, training loop.
+   - `train.py` — the file you modify. RNN model (`CharRNN`), optimizer, training loop.
 4. **Verify data exists**: Check that `~/.cache/autoresearch/` contains the IrishMAN data and a tokenizer. If not, tell the human to run `uv run prepare.py`.
 5. **Initialize results.tsv**: Create `results.tsv` with just the header row. The baseline will be recorded after the first run.
 6. **Confirm and go**: Confirm setup looks good.
@@ -25,14 +25,14 @@ Beyond "lower val_bpb" in the abstract, the human's current research direction f
 
 > Optimiere das LSTM so, dass es langfristige Rhythmen (wie die typischen 4/4- oder 6/8-Taktstrukturen von irischen Jigs und Reels) besser im Gedächtnis behält. Versuche Architektur-Anpassungen in `train.py`, um den Loss zu senken.
 
-Concretely: `val_bpb` rewards good next-character prediction everywhere, but bar-line (`|`) placement and meter consistency (the `M:4/4` / `M:6/8` header vs. the actual bar lengths) are where long-range memory shows up most clearly in ABC notation. When judging whether an architecture change is working, don't just watch the aggregate `val_bpb` number — spot-check a few generated samples for whether bar structure stays coherent over a full tune, not just locally. Ideas worth trying toward this: larger `hidden_size` (more memory capacity), more `NUM_LAYERS` (hierarchical structure), tuning `DROPOUT`, or architectural tweaks in `CharLSTM` (e.g. a learned initial hidden state instead of zero-init, residual/skip connections between LSTM layers). This section reflects the human's current framing — if they redirect the goal, update this section rather than the loop mechanics below.
+Concretely: `val_bpb` rewards good next-character prediction everywhere, but bar-line (`|`) placement and meter consistency (the `M:4/4` / `M:6/8` header vs. the actual bar lengths) are where long-range memory shows up most clearly in ABC notation. When judging whether an architecture change is working, don't just watch the aggregate `val_bpb` number — spot-check a few generated samples for whether bar structure stays coherent over a full tune, not just locally. The baseline is a plain `nn.RNN`, which is known to struggle with exactly this kind of long-range dependency (vanishing gradients) — if `val_bpb`/sample quality plateaus and bar structure still falls apart on longer tunes, swapping `nn.RNN` for `nn.LSTM` or `nn.GRU` in `CharRNN` is the most direct next lever, not just a hyperparameter tweak. Other ideas worth trying: larger `hidden_size` (more memory capacity), more `NUM_LAYERS` (hierarchical structure), tuning `DROPOUT`, or architectural tweaks (e.g. a learned initial hidden state instead of zero-init, residual/skip connections between layers). This section reflects the human's current framing — if they redirect the goal, update this section rather than the loop mechanics below.
 
 ## Experimentation
 
 Each experiment runs on a single GPU. The training script runs for a **fixed time budget of 5 minutes** (wall clock training time, excluding startup/compilation). You launch it simply as: `uv run train.py`.
 
 **What you CAN do:**
-- Modify `train.py` — this is the only file you edit. Everything is fair game: `CharLSTM` architecture, `NUM_LAYERS`, `HIDDEN_SIZE`, `EMBED_SIZE`, `DROPOUT`, optimizer (AdamW, SGD, ...), learning rate / schedule, `GRAD_CLIP`, batch size, training loop, etc.
+- Modify `train.py` — this is the only file you edit. Everything is fair game: `CharRNN` architecture (including swapping `nn.RNN` for `nn.LSTM`/`nn.GRU`), `NUM_LAYERS`, `HIDDEN_SIZE`, `EMBED_SIZE`, `DROPOUT`, optimizer (AdamW, SGD, ...), learning rate / schedule, `GRAD_CLIP`, batch size, training loop, etc.
 
 **What you CANNOT do:**
 - Modify `prepare.py`. It is read-only. It contains the fixed evaluation, data loading, tokenizer, and training constants (time budget, sequence length, etc).
