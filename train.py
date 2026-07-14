@@ -5,6 +5,7 @@ Usage: uv run train.py
 """
 
 import math
+import random
 import time
 from dataclasses import asdict, dataclass
 
@@ -13,7 +14,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import wandb
 
-from prepare import MAX_SEQ_LEN, TIME_BUDGET, Tokenizer, make_dataloader, evaluate_bpb
+from prepare import MAX_SEQ_LEN, TIME_BUDGET, Tokenizer, load_tunes, make_dataloader, evaluate_bpb
 
 # ---------------------------------------------------------------------------
 # RNN model
@@ -43,10 +44,21 @@ class CharRNN(nn.Module):
         )
         self.drop = nn.Dropout(config.dropout)
         self.head = nn.Linear(config.hidden_size, config.vocab_size)
+        self.h0 = nn.Parameter(torch.zeros(config.num_layers, 1, config.hidden_size))
+        self.c0 = nn.Parameter(torch.zeros(config.num_layers, 1, config.hidden_size))
+        self.last_hidden = None  # side channel: (h_n, c_n) detached, set by every forward() call --
+                                 # lets the training loop thread state across steps without changing
+                                 # forward's public return value (quick_eval/evaluate_bpb stay untouched)
 
-    def forward(self, idx, targets=None, reduction='mean'):
+    def forward(self, idx, targets=None, reduction='mean', init_state=None):
         x = self.embed(idx)
-        x, _ = self.rnn(x)  # zero-initialized (h0, c0) per batch, no state carry across steps
+        if init_state is None:
+            h0 = self.h0.expand(-1, x.size(0), -1).contiguous()
+            c0 = self.c0.expand(-1, x.size(0), -1).contiguous()
+        else:
+            h0, c0 = init_state
+        x, (hn, cn) = self.rnn(x, (h0, c0))
+        self.last_hidden = (hn.detach(), cn.detach())
         x = self.drop(x)
         logits = self.head(x)
 
@@ -55,6 +67,68 @@ class CharRNN(nn.Module):
                                    ignore_index=self.config.pad_token_id, reduction=reduction)
             return loss
         return logits
+
+# ---------------------------------------------------------------------------
+# Stateful truncated-BPTT training dataloader (train.py-only, prepare.py untouched)
+# ---------------------------------------------------------------------------
+
+def make_stateful_windowed_dataloader(tokenizer, seq_len, batch_size, T, device, seed=42):
+    """
+    batch_size parallel lanes, each stepping sequentially through one tune's tokens in
+    consecutive seq_len-length chunks (no shuffling within a tune -- order matters here,
+    unlike the stateless windowed loader). When a lane's tune is exhausted it picks up
+    the next tune from a shuffled per-epoch queue, and that lane's first chunk of the new
+    tune is flagged in the returned reset_mask so the training loop resets that lane's
+    carried (h, c) back to the model's learned (h0, c0) instead of leaking state from an
+    unrelated tune. Detached truncated BPTT: the gradient horizon per step stays at
+    seq_len, but forward-pass context now persists across a tune's own windows -- this is
+    the LSTM-specific capability the stateless windowed loader (discarded: wash vs.
+    whole-tune) couldn't exercise, since it reset to (h0, c0) every window.
+    Only replaces the TRAIN loader -- evaluate_bpb (prepare.py, unmodified) and
+    quick_eval's val_loader keep fixed-batch full-sequence make_dataloader, so val_bpb
+    stays comparable across every run in this ledger.
+    """
+    tunes = load_tunes("train")
+    bos, pad = tokenizer.get_bos_token_id(), tokenizer.get_pad_token_id()
+    encoded = [tokenizer.encode(t, prepend=bos)[:T + 1] for t in tunes]
+
+    rng = random.Random(seed)
+    epoch = 1
+    queue = list(range(len(encoded)))
+    rng.shuffle(queue)
+    qpos = 0
+
+    def next_tune_idx():
+        nonlocal qpos, epoch, queue
+        if qpos >= len(queue):
+            queue = list(range(len(encoded)))
+            rng.shuffle(queue)
+            qpos = 0
+            epoch += 1
+        idx = queue[qpos]
+        qpos += 1
+        return idx
+
+    remaining = [list(encoded[next_tune_idx()]) for _ in range(batch_size)]
+
+    while True:
+        x_batch, y_batch, reset_mask = [], [], []
+        for lane in range(batch_size):
+            is_reset = False
+            if len(remaining[lane]) < 2:
+                remaining[lane] = list(encoded[next_tune_idx()])
+                is_reset = True
+            chunk = remaining[lane][:seq_len + 1]
+            if len(chunk) < seq_len + 1:
+                chunk = chunk + [pad] * (seq_len + 1 - len(chunk))
+            remaining[lane] = remaining[lane][seq_len:]
+            x_batch.append(chunk[:-1])
+            y_batch.append(chunk[1:])
+            reset_mask.append(is_reset)
+        x = torch.tensor(x_batch, dtype=torch.long).to(device)
+        y = torch.tensor(y_batch, dtype=torch.long).to(device)
+        reset_mask_t = torch.tensor(reset_mask, dtype=torch.bool, device=device)
+        yield x, y, epoch, reset_mask_t
 
 # ---------------------------------------------------------------------------
 # Hyperparameters (edit these directly, no CLI flags needed)
@@ -69,12 +143,21 @@ NUM_LAYERS = 2
 DROPOUT = 0.0             # helps once training does multiple epochs (confirmed on a fast GPU: 3 epochs
                           # in 300s overfits without it); on slower hardware a run may not even finish one
 
-# Optimization
+# Optimization -- held at run e980c7a's confirmed values: this experiment isolates
+# stateful vs. stateless windowing alone (run 5b26872 already tested stateless windowing
+# in isolation and found it a wash vs. whole-tune; this changes exactly one more thing --
+# carrying (h,c) across a tune's windows -- on top of that).
 LEARNING_RATE = 0.003
 WEIGHT_DECAY = 0.0
 GRAD_CLIP = 1.0            # RNNs are prone to exploding gradients, clip by global norm
 
-BATCH_SIZE = 64            # reduce if OOM
+BATCH_SIZE = 64            # only used for the val_loader/evaluate_bpb (fixed-batch, must stay
+                           # comparable across configs) -- training uses the stateful windowed loader below
+TRAIN_SEQ_LEN = 128        # truncated-BPTT window length; median tune length is short enough
+                           # (~258 tokens in baseline-improve's measurement) that this is only ~2
+                           # windows/tune -- state-carry mainly matters for that 2nd window onward
+WINDOW_BATCH_SIZE = 256    # parallel lanes; batch_size*seq_len ~= 32768, matching baseline-improve's
+                           # best token-budget-per-step
 EVAL_EVERY = 50            # steps between quick val checks (loss/top1/top5) for wandb charts
 
 SAVE_CHECKPOINT = False    # off by default -- every kept experiment would otherwise add a multi-MB
@@ -115,9 +198,10 @@ print(f"Num params: {num_params:,}")
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 
-train_loader = make_dataloader(tokenizer, BATCH_SIZE, MAX_SEQ_LEN, "train", device)
+train_loader = make_stateful_windowed_dataloader(tokenizer, TRAIN_SEQ_LEN, WINDOW_BATCH_SIZE, MAX_SEQ_LEN, device)
 val_loader = make_dataloader(tokenizer, BATCH_SIZE, MAX_SEQ_LEN, "val", device)
-x, y, epoch = next(train_loader)  # prefetch first batch
+x, y, epoch, reset_mask = next(train_loader)  # prefetch first batch
+carried_h, carried_c = None, None
 
 print(f"Time budget: {TIME_BUDGET}s")
 
@@ -128,7 +212,7 @@ wandb.init(project="autoresearch-irishman", mode="offline",
     "device": device.type, "rnn_type": RNN_TYPE, "embed_size": EMBED_SIZE, "hidden_size": HIDDEN_SIZE,
     "num_layers": NUM_LAYERS, "dropout": DROPOUT, "learning_rate": LEARNING_RATE,
     "weight_decay": WEIGHT_DECAY, "grad_clip": GRAD_CLIP, "batch_size": BATCH_SIZE,
-    "num_params": num_params,
+    "train_seq_len": TRAIN_SEQ_LEN, "window_batch_size": WINDOW_BATCH_SIZE, "num_params": num_params,
 })
 
 
@@ -159,11 +243,20 @@ while True:
     sync()
     t0 = time.time()
 
-    loss = model(x, y)
+    if carried_h is None:
+        init_state = None
+    else:
+        h0_learned = model.h0.expand(-1, x.size(0), -1).contiguous()
+        c0_learned = model.c0.expand(-1, x.size(0), -1).contiguous()
+        rm = reset_mask.view(1, -1, 1)
+        init_state = (torch.where(rm, h0_learned, carried_h), torch.where(rm, c0_learned, carried_c))
+
+    loss = model(x, y, init_state=init_state)
     train_loss_f = loss.item()
     tokens_this_step = x.numel()
     loss.backward()
-    x, y, epoch = next(train_loader)
+    carried_h, carried_c = model.last_hidden
+    x, y, epoch, reset_mask = next(train_loader)
 
     grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
     optimizer.step()
