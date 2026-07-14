@@ -1,3 +1,4 @@
 commit	val_bpb	memory_gb	status	description
 1eaa8e2	2.093672	1.4	keep	baseline nn.RNN (embed128/hidden256/2layers, AdamW lr3e-3)
 0465f3d	2.174009	1.4	discard	dropout=0.2 (fight overfitting seen in baseline's 3 epochs)
+10b1c9b	1.839949	1.9	keep	hidden_size 256->384 (more capacity)
