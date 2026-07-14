@@ -1,1 +1,1 @@
-commit	val_bpb	memory_gb	num_steps	tokens_M	status	description
+commit	val_bpb	top1_acc	top5_acc	memory_gb	num_steps	tokens_M	num_params_M	status	description

@@ -78,30 +78,35 @@ grep "^val_bpb:" run.log
 
 Two files record every attempt, kept or not: `results.tsv` (terse, machine-parseable table) and `experiment_log.md` (narrative log with more detail). Both are tracked in git — see "Committing the ledger" below for why they need their own commit, separate from the experimental code commit.
 
-`results.tsv` is tab-separated, NOT comma-separated (commas break in descriptions). Header row and 7 columns:
+`results.tsv` is tab-separated, NOT comma-separated (commas break in descriptions). Header row and 10 columns:
 
 ```
-commit	val_bpb	memory_gb	num_steps	tokens_M	status	description
+commit	val_bpb	top1_acc	top5_acc	memory_gb	num_steps	tokens_M	num_params_M	status	description
 ```
 
 1. git commit hash (short, 7 chars) — the code commit this row describes, even if that commit was later reset away (see below)
-2. val_bpb achieved (e.g. 1.234567) — use 0.000000 for crashes
-3. peak memory in GB, round to .1f (e.g. 12.3 — divide peak_vram_mb by 1024) — use 0.0 for crashes
-4. num_steps — from train.py's final printout, use 0 for crashes
-5. tokens_M — total_tokens_M from train.py's final printout, use 0.0 for crashes
-6. status: `keep`, `keep-prov`, `discard`, or `crash` (see `keep-prov` rule below)
-7. short text description of what this experiment tried
+2. val_bpb achieved (e.g. 1.234567) — use 0.000000 for crashes. Stays the primary keep/discard signal.
+3. top1_acc — from train.py's final printout (e.g. 0.6462), use 0.0 for crashes. The assignment's headline metric, logged every run. NOTE: single-batch `quick_eval` number, a noisy rough signal only — see the top1/top5 caveat below.
+4. top5_acc — same source and caveat as top1_acc, use 0.0 for crashes
+5. peak memory in GB, round to .1f (e.g. 12.3 — divide peak_vram_mb by 1024) — use 0.0 for crashes
+6. num_steps — from train.py's final printout, use 0 for crashes
+7. tokens_M — total_tokens_M from train.py's final printout, use 0.0 for crashes
+8. num_params_M — from train.py's final printout (e.g. 3.540), use 0.0 for crashes. Essential context for any capacity/hidden_size comparison — especially across cell types, where an LSTM cell is ~4x an RNN cell's params at the same hidden_size.
+9. status: `keep`, `keep-prov`, `discard`, or `crash` (see `keep-prov` rule below)
+10. short text description of what this experiment tried
 
-Columns 4/5 exist because TIME_BUDGET is fixed (300s), not step count — two runs can differ hugely in how much data they saw in that window (e.g. a slower architecture might do 1000 steps where a faster one does 8000). A val_bpb "win" from a run that saw far fewer tokens may just be less overfitting from less exposure, not a real improvement. **Mechanism (`keep-prov`)**: before keeping a run, compare its `tokens_M` to the median `tokens_M` of all prior `keep`/`keep-prov` rows. Below 60% of that median → status `keep-prov` (provisional), note the confound in the `experiment_log.md` entry, and re-test the same idea at a smaller `HIDDEN_SIZE` (or whichever lever restores throughput) as the very next experiment. A `keep-prov` promotes to `keep` only once a comparable-throughput follow-up confirms the win; if the follow-up discards, the `keep-prov` row stays in the ledger as history but the code reverts to the last real `keep`. Mention any `keep-prov` that survived to end-of-session in the one-pager.
+**top1/top5 caveat (matters for the one-pager, not the loop):** the per-run top1_acc/top5_acc are `quick_eval`'s single val-batch numbers — fine as a rough per-run signal (they track val_bpb closely, r≈-0.96 across baseline-improve), but NOT the assignment-grade metric, which wants top-1/top-5 "over all sequences in the test set." Compute that once, aggregated over the full val split, on the final chosen model, for the write-up — don't quote the noisy single-batch ledger numbers as your reported result. Keep making keep/discard calls on val_bpb (the aggregated ground-truth metric); top1/top5 in the ledger is for tracking, not decisions.
+
+Columns 6/7 (num_steps/tokens_M) exist because TIME_BUDGET is fixed (300s), not step count — two runs can differ hugely in how much data they saw in that window (e.g. a slower architecture might do 1000 steps where a faster one does 8000). A val_bpb "win" from a run that saw far fewer tokens may just be less overfitting from less exposure, not a real improvement. **Mechanism (`keep-prov`)**: before keeping a run, compare its `tokens_M` to the median `tokens_M` of all prior `keep`/`keep-prov` rows. Below 60% of that median → status `keep-prov` (provisional), note the confound in the `experiment_log.md` entry, and re-test the same idea at a smaller `HIDDEN_SIZE` (or whichever lever restores throughput) as the very next experiment. A `keep-prov` promotes to `keep` only once a comparable-throughput follow-up confirms the win; if the follow-up discards, the `keep-prov` row stays in the ledger as history but the code reverts to the last real `keep`. Mention any `keep-prov` that survived to end-of-session in the one-pager.
 
 Example:
 
 ```
-commit	val_bpb	memory_gb	num_steps	tokens_M	status	description
-a1b2c3d	0.997900	1.0	8000	410.0	keep	baseline
-b2c3d4e	0.993200	1.0	1100	55.0	keep	increase hidden_size to 512
-c3d4e5f	1.005000	1.0	8000	410.0	discard	switch optimizer to SGD
-d4e5f6g	0.000000	0.0	0	0.0	crash	hidden_size 4096 (OOM)
+commit	val_bpb	top1_acc	top5_acc	memory_gb	num_steps	tokens_M	num_params_M	status	description
+a1b2c3d	0.997900	0.5820	0.8833	1.0	8000	410.0	0.847	keep	baseline
+b2c3d4e	0.993200	0.5910	0.8890	1.0	1100	55.0	3.396	keep	increase hidden_size to 512
+c3d4e5f	1.005000	0.5790	0.8810	1.0	8000	410.0	0.847	discard	switch optimizer to SGD
+d4e5f6g	0.000000	0.0	0.0	0.0	0	0.0	0.0	crash	hidden_size 4096 (OOM)
 ```
 
 `experiment_log.md` is one entry per experiment, appended (never edited/rewritten), most recent last:
@@ -124,7 +129,22 @@ Check it at the start of every loop iteration (step 0 below), before touching `t
 
 If it exists and has content:
 - **Content is exactly `STOP` (case-insensitive, ignoring surrounding whitespace)**: this is not a tip, it's an instruction to end the autonomous loop. Do not start a new experiment. If you're reading this between experiments (the normal case, since you only check at iteration boundaries), you're already done — finish any in-progress ledger commit for the last experiment if you haven't, then stop and summarize what happened across the session for the human. Do not discard/reset the last kept state to do this.
-- **Any other content**: treat it as a human-supplied idea or steer for your *next* experiment (this iteration's step 2). Fold it into what you try. Log it with `Source: human (<summary>)` in `experiment_log.md` once you've acted on it. Clear the file (empty it, or delete it) after reading, so you don't re-process the same note forever.
+- **Any other content**: an *optional* steer from the human — a hint, a direction, an idea. Fold it into your next experiment (this iteration's step 2); it overrides your own pick for that round. But it is a bonus, not your lifeline: you generate your own directions every round now (see "Driving your own research" below), so an empty mailbox is the normal case, not a problem to solve. Log it with `Source: human (<summary>)` in `experiment_log.md` once you've acted on it, and clear the file after reading so you don't re-process the same note forever.
+
+## Driving your own research (every round)
+
+The biggest wins in this project did NOT come from greedy one-knob sweeps — they came from stepping back and reframing the problem (spotting that padding waste was inflating apparent "update starvation," that a vanilla RNN backpropagating over 1024 steps was self-inflicting vanishing gradients, that the fixed-time budget makes throughput the hidden variable behind most "wins"). Historically those reframes arrived from outside via `human_input.md`. **That is now your job, every round — not the human's.** You are a researcher, not a hyperparameter-sweep script.
+
+Each round, before picking a change and during the ~5 min of idle time while the run trains (loop step 4):
+
+1. **Reflect (bird's-eye, every round).** Re-read the *whole* `results.tsv`/`experiment_log.md`, not just the last row. Name the current binding constraint (throughput? capacity? gradient flow? regularization? update count?) and the mechanism behind the last few results. When a result surprises you, that surprise is the most valuable thing on the table — chase *why* it happened, don't just log the number and reach for the next knob.
+
+2. **Research actively.** Validate what you're seeing against real sources and mine them for techniques you haven't tried. If you have web search/fetch tools, USE them — reference implementations (e.g. `karpathy/char-rnn`, folk-rnn, nanoGPT-style repos), blog posts, papers on char-level RNNs, truncated BPTT, LSTM/GRU cells, initialization, optimizers, regularization. Cite the actual URL you read in the `experiment_log.md` entry.
+   - **Honesty guard (hard rule):** cite only what you actually fetched. If you have no web access, or a fetch fails, say so plainly in the log and reason from the in-scope files + first principles instead. NEVER fabricate a citation, invent what "the literature says," or report a result you didn't get — a made-up reference is far worse than none, it poisons every decision built on it.
+
+3. **Turn it into your own concrete improvement — architectural changes included.** New dataloaders, cell-type changes (within this worktree's scope), structural tweaks, optimizer swaps: all fair game and all *yours* to originate now. You are no longer restricted to sweeping around ideas the human hands you. Keep the discipline though: **one change per experiment**, and the simplicity criterion still holds.
+
+Time-box it — one or two targeted lookups that actually inform the next concrete change, inside the run's idle window. Don't stall the loop reading for an hour, and don't research in the abstract. The rhythm is: reflect → research → hypothesis → one change → run → keep/discard → reflect.
 
 ## The experiment loop
 
@@ -133,10 +153,10 @@ The experiment runs on a dedicated branch (e.g. `autoresearch/mar5` or `autorese
 LOOP FOREVER:
 
 0. Check `human_input.md` (see above) — this can end the loop before you start another experiment.
-1. Look at the git state: the current branch/commit we're on
-2. Tune `train.py` with an experimental idea by directly hacking the code.
+1. **Orient.** Look at the git state (current branch/commit), then do the bird's-eye reflection from "Driving your own research" above — re-read the *whole* ledger, name the binding constraint, and decide what the *data* says to try next, not just the next unswept knob. Every round, not only round 1.
+2. Pick ONE concrete idea — informed by step 1's reflection and your own research, architectural changes included — and implement it by directly hacking `train.py`. One change per experiment.
 3. git commit (train.py only — not the ledger files, they come later, see step 8)
-4. Run the experiment in the background, don't block on it: `uv run train.py > run.log 2>&1 &` (or your environment's background-execution mechanism for Bash) — redirect to a file, do NOT use `tee` or otherwise stream the output, that floods your context for no benefit. Don't poll it every few seconds either, same reason: the budget is fixed at 5 minutes plus a few seconds of startup/eval overhead, so there's nothing to gain from checking early. Either use whatever "notify me when this finishes" / scheduled-wakeup mechanism your environment offers, or a single check-back around the 05:10 mark. If your environment gives you idle time while it runs, that's fine to spend thinking about the *next* experiment, not on watching this one.
+4. Run the experiment in the background, don't block on it: `uv run train.py > run.log 2>&1 &` (or your environment's background-execution mechanism for Bash) — redirect to a file, do NOT use `tee` or otherwise stream the output, that floods your context for no benefit. Don't poll it every few seconds either, same reason: the budget is fixed at 5 minutes plus a few seconds of startup/eval overhead, so there's nothing to gain from checking early. Either use whatever "notify me when this finishes" / scheduled-wakeup mechanism your environment offers, or a single check-back around the 05:10 mark. Spend the idle time on "Driving your own research" above — reflecting on the full ledger and actually researching the next move — not on watching this run.
 5. Sync wandb, regardless of what step 4 did — offline runs live under `wandb/offline-run-*` and are otherwise as ephemeral as the VM itself (unlike the ledger, `wandb/` is gitignored, nothing protects it from a disconnect). Attempt each not-yet-synced run individually, with a timeout so a stuck sync can't stall the loop the way the HF Xet hang once did:
    ```bash
    for d in wandb/offline-run-*; do
@@ -166,6 +186,6 @@ The idea is that you are a completely autonomous researcher trying things out. I
 
 **Crashes**: If a run crashes (OOM, or a bug, or etc.), use your judgment: If it's something dumb and easy to fix (e.g. a typo, a missing import), fix it and re-run. If the idea itself is fundamentally broken, just skip it, log "crash" as the status in the tsv, and move on.
 
-**NEVER STOP**: Once the experiment loop has begun (after the initial setup), do NOT pause to ask the human if you should continue. Do NOT ask "should I keep going?" or "is this a good stopping point?". The human might be asleep, or gone from a computer and expects you to continue working *indefinitely* until stopped. You are autonomous. If you run out of ideas on your own: re-read the in-scope files, re-sweep axes prior runs only sampled once (LR/grad-clip/warmup often shift after a dataloader change), and combine prior near-misses. Architecture *ideas* — new dataloaders, new cell types, structural changes — are the human's job and arrive via `human_input.md`; your job is to evaluate and sweep around them. Don't promise "reading papers" you won't read. The loop runs until `human_input.md` tells you `STOP` (see above) — that is the sanctioned way to end it, not you deciding you've done enough.
+**NEVER STOP**: Once the experiment loop has begun (after the initial setup), do NOT pause to ask the human if you should continue. Do NOT ask "should I keep going?" or "is this a good stopping point?". The human might be asleep or away and expects you to run *indefinitely* until stopped — fire and forget. You are autonomous, and that now means autonomous in *ideas*, not just execution: generating the next direction — architectural reframes and new techniques from your own research (see "Driving your own research" above) included — is your job, not something you wait on `human_input.md` to supply. If you feel out of ideas, you have not reflected or researched hard enough: re-read the full ledger for a pattern you haven't named, look up how reference implementations handle the constraint you're stuck on, re-sweep axes that shift after a structural change (LR/grad-clip/warmup often move after a dataloader change), and combine prior near-misses. The loop runs until `human_input.md` tells you `STOP` (see above) — that is the only sanctioned way to end it, not you deciding you've done enough.
 
 As an example use case, a user might leave you running while they sleep. If each experiment takes you ~5 minutes then you can run approx 12/hour, for a total of about 100 over the duration of the average human sleep. The user then wakes up to experimental results, all completed by you while they slept!
