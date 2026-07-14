@@ -69,3 +69,9 @@ One entry per experiment (kept, discarded, or crashed), appended by the loop's l
 **Change:** `HIDDEN_SIZE` 1024 → 1536 (3.396M → 7.447M params), testing whether the capacity trend from 384→1024 continues further up.
 **Result:** val_bpb 2.176296 (much worse than 1.722063, back near baseline territory), memory 3.7GB (up from 2.5GB), only 468 steps / 23.5M tokens (vs. 1024's 844 steps / 43.1M)
 **Notes:** Trend reversed hard. Params roughly doubled from 1024→1536 but steps nearly halved (844→468), so this run got severely undertrained relative to its size — top1_acc dropped from 0.6201 to 0.5368, the clearest sign of undertraining rather than overfitting (no train/val divergence pattern to speak of, just not enough updates for a model this large). This maps the top of the capacity curve found so far: somewhere between 1024 and 1536 is too big for a 300s budget at this throughput. 1024 remains the sweet spot.
+
+## 402716f — discard
+**Source:** agent
+**Change:** `HIDDEN_SIZE` 1024 → 1280 (midpoint), trying to narrow the sweet spot between 1024's win and 1536's overshoot.
+**Result:** val_bpb 2.007747 (worse than 1.722063), memory 3.1GB, 589 steps / 29.8M tokens (vs. 1024's 844 / 43.1M)
+**Notes:** Surprisingly bad already — top1_acc 0.5625, closer to the 1536 failure (0.5368) than to 1024's 0.6201. The capacity curve falls off much faster right above 1024 than expected; 1024 isn't just "near the peak," it looks like it's sitting right at a fairly sharp optimum for this time budget/throughput regime. Not narrowing further (e.g. 1152) — treating hidden_size=1024 as settled and moving to other levers: this model is now much bigger than when weight_decay=0.01/LR schedule were tuned at hidden_size=384, so those may be worth revisiting, plus batch size, embed_size, and architectural tweaks (residual connections).
