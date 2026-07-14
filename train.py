@@ -70,7 +70,7 @@ DROPOUT = 0.0             # helps once training does multiple epochs (confirmed 
                           # in 300s overfits without it); on slower hardware a run may not even finish one
 
 # Optimization
-LEARNING_RATE = 0.003
+LEARNING_RATE = 0.0015
 WEIGHT_DECAY = 0.05
 GRAD_CLIP = 1.0            # RNNs are prone to exploding gradients, clip by global norm
 WARMUP_STEPS = 20          # linear warmup, then cosine decay over the wall-clock time budget
