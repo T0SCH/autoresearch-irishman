@@ -61,6 +61,8 @@ class CharRNN(nn.Module):
 # ---------------------------------------------------------------------------
 
 # Model architecture
+RNN_TYPE = "rnn"  # not a hyperparameter — set per worktree to tag the architecture family in
+                          # wandb (rnn/lstm/gru/birnn); the agent updates this when it swaps the recurrent cell
 EMBED_SIZE = 128
 HIDDEN_SIZE = 256
 NUM_LAYERS = 2
@@ -121,8 +123,9 @@ print(f"Time budget: {TIME_BUDGET}s")
 
 # offline mode: no network calls during the run (avoids stalls in the unattended overnight loop),
 # `wandb sync wandb/offline-run-*` uploads everything afterward
-wandb.init(project="autoresearch-irishman", mode="offline", config={
-    "device": device.type, "embed_size": EMBED_SIZE, "hidden_size": HIDDEN_SIZE,
+wandb.init(project="autoresearch-irishman", mode="offline",
+    tags=[RNN_TYPE], config={
+    "device": device.type, "rnn_type": RNN_TYPE, "embed_size": EMBED_SIZE, "hidden_size": HIDDEN_SIZE,
     "num_layers": NUM_LAYERS, "dropout": DROPOUT, "learning_rate": LEARNING_RATE,
     "weight_decay": WEIGHT_DECAY, "grad_clip": GRAD_CLIP, "batch_size": BATCH_SIZE,
     "num_params": num_params,
