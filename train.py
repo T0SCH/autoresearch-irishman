@@ -73,6 +73,8 @@ DROPOUT = 0.0             # helps once training does multiple epochs (confirmed 
 LEARNING_RATE = 0.003
 WEIGHT_DECAY = 0.01
 GRAD_CLIP = 1.0            # RNNs are prone to exploding gradients, clip by global norm
+WARMUP_STEPS = 20          # linear warmup, then cosine decay over the wall-clock time budget
+                           # (time-based, not step-based -- step count varies a lot across configs)
 
 BATCH_SIZE = 64            # reduce if OOM
 EVAL_EVERY = 50            # steps between quick val checks (loss/top1/top5) for wandb charts
@@ -163,6 +165,14 @@ while True:
     tokens_this_step = x.numel()
     loss.backward()
     x, y, epoch = next(train_loader)
+
+    if step < WARMUP_STEPS:
+        lr_scale = (step + 1) / WARMUP_STEPS
+    else:
+        progress = min(total_training_time / TIME_BUDGET, 1.0)
+        lr_scale = 0.5 * (1.0 + math.cos(math.pi * progress))
+    for pg in optimizer.param_groups:
+        pg["lr"] = LEARNING_RATE * lr_scale
 
     grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
     optimizer.step()
