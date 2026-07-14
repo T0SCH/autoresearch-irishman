@@ -19,3 +19,4 @@ e3f05ed	1.753826	0.7	2573	25.0	discard	batch_size 32->16, worse despite more ste
 c30583f	0.000000	0.0	0	0.0	crash	IRNN recipe retry at LR=0.0003 (10x lower), still exploded -- rules out LR as the cause
 40040ea	1.658872	1.4	1572	35.4	keep	LEARNING_RATE 0.003->0.0015 at batch_size=32, new best
 c0fe683	1.683150	1.4	1556	35.1	discard	LEARNING_RATE 0.0015->0.0008, worse -- brackets optimum around 0.0015
+ce2bfc9	1.637362	0.5	3953	31.7	keep	length-bucketed training dataloader (human idea), padding 59%->10%, new best
