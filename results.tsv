@@ -4,3 +4,4 @@ commit	val_bpb	memory_gb	status	description
 10b1c9b	1.839949	1.9	keep	hidden_size 256->384 (more capacity)
 17b792f	1.858794	1.3	discard	hidden_size 384->512, worse val_bpb than 384 despite recovered throughput
 49edaa4	1.833233	1.9	keep	learned initial hidden state (h0 param) instead of zero-init
+4f5a853	1.839526	1.9	discard	dropout=0.1 on hidden_size=384+learned h0, slightly worse

@@ -31,3 +31,9 @@ One entry per experiment (kept, discarded, or crashed), appended by the loop's l
 **Change:** Added `self.h0 = nn.Parameter(torch.zeros(num_layers, 1, hidden_size))`, expanded per-batch and passed into `nn.RNN` instead of relying on the implicit zero-init.
 **Result:** val_bpb 1.833233 (down from 1.839949), memory 1.9GB, throughput unchanged (53.6M tokens / 1045 steps — same cuDNN kernel path as plain hidden_size=384)
 **Notes:** Small but real improvement (~0.0067) for 3 lines of code — good complexity/benefit ratio per program.md's simplicity criterion. Matches the program.md goal framing: a learned starting state can encode a prior about typical tune openings (e.g. anacrusis/pickup notes, common opening intervals) instead of forcing the model to infer "nothing has happened yet" from a zero vector every single sequence. New best: val_bpb 1.833233.
+
+## 4f5a853 — discard
+**Source:** agent
+**Change:** `DROPOUT` 0.0 → 0.1 on top of hidden_size=384 + learned h0 (retrying the dropout idea at a milder rate, reasoning that this base only gets through part of 1 epoch vs. baseline's 3, so overfitting pressure should be much lower).
+**Result:** val_bpb 1.839526 (worse than current best 1.833233), memory 1.9GB
+**Notes:** Still slightly worse, same as the 0.2 attempt at baseline. Two data points now both say dropout hurts in this fixed-time-budget setup — likely because the model here is throughput/data-limited rather than overfit-limited (partial epoch, not multiple), so dropout just removes useful signal without a matching overfitting benefit to offset it. Dropping this lever; not worth a third attempt at yet another rate.
