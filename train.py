@@ -137,7 +137,10 @@ def make_stateful_windowed_dataloader(tokenizer, seq_len, batch_size, T, device,
 # Model architecture
 RNN_TYPE = "lstm"  # not a hyperparameter — set per worktree to tag the architecture family in
                           # wandb (rnn/lstm/gru/birnn); the agent updates this when it swaps the recurrent cell
-EMBED_SIZE = 128
+EMBED_SIZE = 256           # own idea: isolated re-test -- baseline-improve found 256>128 for the RNN
+                          # ("input-representation win, orthogonal to recurrence, should transfer
+                          # directly" per program.md), but it was only ever tried here inside 5fc6b30's
+                          # 5-variable bundle and discarded along with everything else in it.
 HIDDEN_SIZE = 128
 NUM_LAYERS = 2
 DROPOUT = 0.1             # human steer: the one LSTM-allowed dropout check per program.md (RNN failed
