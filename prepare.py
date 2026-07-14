@@ -13,6 +13,7 @@ os.environ["HF_HUB_DISABLE_XET"] = "1"  # xet transfer backend hangs/times out o
 
 import math
 import json
+import random
 
 from huggingface_hub import hf_hub_download
 import torch
@@ -147,10 +148,14 @@ def make_dataloader(tokenizer, B, T, split, device):
     Rows are padded with PAD up to the longest tune in the batch (not always T)
     PAD positions carry zero byte-length, so evaluate_bpb and the training loss
     (ignore_index=pad_token_id) both skip them automatically.
+    Tunes are reshuffled (fixed seed) at the start and on every epoch wrap, so
+    multi-epoch runs (common on faster GPUs) don't repeat identical batches.
     """
     assert split in ["train", "val"]
     tunes = load_tunes(split)
     assert len(tunes) > 0, f"No tunes found for split={split}. Run prepare.py first."
+    rng = random.Random(42)
+    rng.shuffle(tunes)
     bos, pad = tokenizer.get_bos_token_id(), tokenizer.get_pad_token_id()
     epoch = 1
     i = 0
@@ -160,6 +165,7 @@ def make_dataloader(tokenizer, B, T, split, device):
         for _ in range(B):
             if i >= len(tunes):
                 i, epoch = 0, epoch + 1
+                rng.shuffle(tunes)
             rows.append(tokenizer.encode(tunes[i], prepend=bos)[:T + 1])
             i += 1
 

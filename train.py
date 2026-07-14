@@ -63,7 +63,8 @@ class CharRNN(nn.Module):
 EMBED_SIZE = 128
 HIDDEN_SIZE = 256
 NUM_LAYERS = 2
-DROPOUT = 0.0             # regularization matters over many epochs; a 5-min run barely completes one
+DROPOUT = 0.0             # helps once training does multiple epochs (confirmed on a fast GPU: 3 epochs
+                          # in 300s overfits without it); on slower hardware a run may not even finish one
 
 # Optimization
 LEARNING_RATE = 0.003
