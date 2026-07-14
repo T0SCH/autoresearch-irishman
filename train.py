@@ -147,9 +147,16 @@ DROPOUT = 0.0             # helps once training does multiple epochs (confirmed 
 # stateful vs. stateless windowing alone (run 5b26872 already tested stateless windowing
 # in isolation and found it a wash vs. whole-tune; this changes exactly one more thing --
 # carrying (h,c) across a tune's windows -- on top of that).
-LEARNING_RATE = 0.003
+LEARNING_RATE = 0.003      # peak LR -- kept at the confirmed LSTM value (NOT baseline-improve's 0.0015),
+                           # per human steer: isolate the schedule mechanism itself, not a peak-LR change
 WEIGHT_DECAY = 0.0
 GRAD_CLIP = 1.0            # RNNs are prone to exploding gradients, clip by global norm
+WARMUP_STEPS = 20          # linear warmup, then cosine decay over the wall-clock time budget
+                           # (time-based, not step-based -- step count varies a lot across configs).
+                           # Human steer via human_input.md: 5fc6b30 bundled this schedule with an
+                           # untested LR-peak halving (0.003->0.0015) and a since-confirmed-wash loader
+                           # change, so the regression there can't be blamed on the schedule itself --
+                           # isolating it here, peak unchanged at the confirmed 0.003.
 
 BATCH_SIZE = 64            # only used for the val_loader/evaluate_bpb (fixed-batch, must stay
                            # comparable across configs) -- training uses the stateful windowed loader below
@@ -258,6 +265,14 @@ while True:
     loss.backward()
     carried_h, carried_c = model.last_hidden
     x, y, epoch, reset_mask = next(train_loader)
+
+    if step < WARMUP_STEPS:
+        lr_scale = (step + 1) / WARMUP_STEPS
+    else:
+        progress = min(total_training_time / TIME_BUDGET, 1.0)
+        lr_scale = 0.5 * (1.0 + math.cos(math.pi * progress))
+    for pg in optimizer.param_groups:
+        pg["lr"] = LEARNING_RATE * lr_scale
 
     grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
     optimizer.step()
