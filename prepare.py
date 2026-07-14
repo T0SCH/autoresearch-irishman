@@ -9,6 +9,8 @@ Data and tokenizer are stored in ~/.cache/autoresearch/.
 """
 
 import os
+os.environ["HF_HUB_DISABLE_XET"] = "1"  # xet transfer backend hangs/times out on Colab, plain HTTP works fine
+
 import math
 import json
 
