@@ -80,8 +80,8 @@ DROPOUT = 0.1             # GRU-side test: LSTM found 0.1 a clean repeatable win
 # Optimization
 LEARNING_RATE = 0.003      # was 0.004 (optimum at TRAIN_SEQ_LEN=1024). Re-bracket at TRAIN_SEQ_LEN=512:
                           # 1.53x more update steps may allow a lower LR to converge better.
-WEIGHT_DECAY = 0.1        # was 0.05 (tuned at hidden=256). Re-bracket at hidden=384: bigger model ->
-                          # more overfitting risk -> maybe more weight decay helps. One variable.
+WEIGHT_DECAY = 0.05       # was 0.1 (optimum at 1024). Re-bracket at TRAIN_SEQ_LEN=512: more update steps
+                          # may mean less weight decay is needed. One variable.
 GRAD_CLIP = 1.0            # RNNs are prone to exploding gradients, clip by global norm
 
 BATCH_SIZE = 64            # reduce if OOM
