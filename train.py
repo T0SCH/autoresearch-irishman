@@ -146,9 +146,10 @@ RNN_TYPE = "lstm"  # not a hyperparameter — set per worktree to tag the archit
 EMBED_SIZE = 128
 HIDDEN_SIZE = 128
 NUM_LAYERS = 2
-DROPOUT = 0.2             # own idea: 0.1 confirmed to help (b4e13aa) -- bracketing further to see if
-                          # more regularization keeps helping or overshoots, now that this axis is
-                          # live (program.md only mandated the one check, but a bracket is fair game).
+DROPOUT = 0.1             # human steer: the one LSTM-allowed dropout check per program.md (RNN failed
+                          # 4x across every config there) -- now is the right moment: strong config
+                          # settled, hidden_size/weight_decay give real capacity+regularization headroom.
+                          # If it hurts like it did for RNN, settle DROPOUT=0.0 for good, no further sweep.
 
 # Optimization -- held at run e980c7a's confirmed values: this experiment isolates
 # stateful vs. stateless windowing alone (run 5b26872 already tested stateless windowing
