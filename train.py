@@ -42,6 +42,13 @@ class CharRNN(nn.Module):
             dropout=config.dropout if config.num_layers > 1 else 0.0,
             batch_first=True,
         )
+        # Orthogonal init for the GRU recurrent/input weights (replaces PyTorch default uniform).
+        # Classic RNN lever: orthogonal matrices preserve gradient norm through depth/time ->
+        # better gradient flow, faster convergence in the fixed 5-min budget. One-variable test.
+        if ORTHOGONAL_INIT:
+            for name, p in self.rnn.named_parameters():
+                if name.startswith("weight_ih") or name.startswith("weight_hh"):
+                    nn.init.orthogonal_(p)
         self.drop = nn.Dropout(config.dropout)
         self.head = nn.Linear(config.hidden_size, config.vocab_size)
         # Weight tying: share the embedding and output-head weight matrix (free win in both
@@ -74,6 +81,8 @@ EMBED_SIZE = 384  # = HIDDEN_SIZE, to enable weight tying. Raised with hidden fo
                 # showed embed-up alone hurts at 256; if 384 wins anyway, hidden capacity dominates.
 HIDDEN_SIZE = 384  # bracket above LSTM's 256 ceiling; GRU is cheaper/step so the ceiling may sit higher.
 NUM_LAYERS = 2
+ORTHOGONAL_INIT = True  # init GRU weight_ih*/weight_hh* orthogonally (vs PyTorch default uniform) for
+                          # better gradient flow / faster convergence in the 5-min budget. One-variable test.
 DROPOUT = 0.1             # GRU-side test: LSTM found 0.1 a clean repeatable win (confirmed twice), RNN
                           # the opposite (dropout hurt 4x). Priors disagree -> let GRU's own result decide.
 
@@ -90,7 +99,7 @@ TRAIN_SEQ_LEN = 512        # training crop length (val stays at MAX_SEQ_LEN=1024
 assert TRAIN_SEQ_LEN <= MAX_SEQ_LEN
 EVAL_EVERY = 50            # steps between quick val checks (loss/top1/top5) for wandb charts
 
-SAMPLE_CHECK = True      # bar-structure spot-check (program.md every-10th-keep mechanism): when True,
+SAMPLE_CHECK = False     # bar-structure spot-check (program.md every-10th-keep mechanism): when True,
                            # generate 3 samples (temp 0.8, ~512 tok, seeded from a val tune) after eval
                            # and write them to samples.txt. Runs after eval so it never affects val_bpb.
 SAVE_CHECKPOINT = False    # off by default -- every kept experiment would otherwise add a multi-MB
