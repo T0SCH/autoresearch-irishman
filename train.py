@@ -166,8 +166,11 @@ def make_stateful_windowed_dataloader(tokenizer, seq_len, batch_size, T, device,
 # Model architecture
 RNN_TYPE = "lstm"  # not a hyperparameter — set per worktree to tag the architecture family in
                           # wandb (rnn/lstm/gru/birnn); the agent updates this when it swaps the recurrent cell
-EMBED_SIZE = 128
-HIDDEN_SIZE = 128
+EMBED_SIZE = 256          # human steer: retest w/ hidden_size, now that fp16 (16abb36) gives ~2.5x
+                          # throughput -- the earlier c255ddc attempt at this size was keep-prov
+                          # (only 38% of median tokens under fp32), this run should finally land
+                          # near the fp16-era step count and give a fair capacity comparison
+HIDDEN_SIZE = 256
 NUM_LAYERS = 2
 DROPOUT = 0.1             # human steer: the one LSTM-allowed dropout check per program.md (RNN failed
                           # 4x across every config there) -- now is the right moment: strong config
