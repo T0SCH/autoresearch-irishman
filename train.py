@@ -181,11 +181,10 @@ DROPOUT = 0.1             # human steer: the one LSTM-allowed dropout check per 
 # stateful vs. stateless windowing alone (run 5b26872 already tested stateless windowing
 # in isolation and found it a wash vs. whole-tune; this changes exactly one more thing --
 # carrying (h,c) across a tune's windows -- on top of that).
-LEARNING_RATE = 0.005     # own idea: fresh re-tune at HIDDEN_SIZE=256 (ca58381). 0.008 was bracketed
-                          # and confirmed at hidden_size=128 (c0977dd/e20a254) -- never re-checked at
-                          # this larger capacity, where gradient/gate scale differs (program.md's
-                          # "re-tune fresh" guidance). Trying the previously-bracketed 0.005 point first
-                          # as a direction probe before committing to a fresh bracket around it.
+LEARNING_RATE = 0.003     # own idea: continue the fresh HIDDEN_SIZE=256 bracket downward -- 0.008->0.005
+                          # (f9e43b5) was a real, matched-throughput win, opposite direction from the
+                          # hidden_size=128 bracket's optimum. Checking whether the trend continues to
+                          # 0.003 (the pre-bracket original default) or 0.005 is already the local optimum.
 WEIGHT_DECAY = 0.05        # human steer: isolated re-test -- never tested alone on the LSTM (only in
                            # 5fc6b30's 5-variable bundle). At ~0.29M params with multiple epochs of
                            # exposure (9000+ steps), more plausible as a real regularizer here than
