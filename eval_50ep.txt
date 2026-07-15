@@ -1,0 +1,7 @@
+Device: cuda
+Loaded checkpoint_50ep.pt
+Config: RNNConfig(vocab_size=98, embed_size=256, hidden_size=256, num_layers=3, dropout=0.1, pad_token_id=97)
+Val tunes: 2162
+Total next-char positions: 619332
+top1_acc: 0.772490
+top5_acc: 0.959440
