@@ -77,7 +77,8 @@ DROPOUT = 0.1             # GRU-side test: LSTM found 0.1 a clean repeatable win
                           # the opposite (dropout hurt 4x). Priors disagree -> let GRU's own result decide.
 
 # Optimization
-LEARNING_RATE = 0.003
+LEARNING_RATE = 0.004      # was 0.003. Untested upward direction (0.002 was worse). At hidden=384+wd0.1
+                          # a slightly higher LR might help or go unstable - one quick test.
 WEIGHT_DECAY = 0.1        # was 0.05 (tuned at hidden=256). Re-bracket at hidden=384: bigger model ->
                           # more overfitting risk -> maybe more weight decay helps. One variable.
 GRAD_CLIP = 1.0            # RNNs are prone to exploding gradients, clip by global norm
