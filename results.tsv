@@ -15,3 +15,4 @@ b4e13aa	1.375155	0.6994	0.9395	0.8	9284	303.9	0.290	keep	DROPOUT 0.0->0.1, the o
 c255ddc	1.340972	0.7009	0.9399	0.7	3609	117.9	0.960	keep-prov	HIDDEN_SIZE=256 + TRAIN_SEQ_LEN=128 (own idea, throughput-matched retest w/ wd=0.05+dropout=0.1) -- best val_bpb yet but tokens_M still only 38% of median, throughput lever failed again
 c4fde9b	1.408745	0.6910	0.9357	0.9	7735	253.1	0.368	discard	EMBED_SIZE 128->256 isolated re-test (own idea) -- worse, unlike RNN where it helped; hidden=128 doesn't need the extra embed capacity
 0f37650	1.358393	0.7035	0.9460	0.8	8869	290.3	0.277	keep	weight tying (share embed/head weights, own idea) -- new confirmed best, clean win across val_bpb/top1/top5, fewer params too
+49c8d09	1.440336	0.6869	0.9390	0.8	14945	489.4	0.145	discard	NUM_LAYERS 2->1 (own idea) -- much worse despite 60% more tokens, 1 layer lacks capacity
