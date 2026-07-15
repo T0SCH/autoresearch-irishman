@@ -84,6 +84,9 @@ WEIGHT_DECAY = 0.1        # was 0.05 (tuned at hidden=256). Re-bracket at hidden
 GRAD_CLIP = 1.0            # RNNs are prone to exploding gradients, clip by global norm
 
 BATCH_SIZE = 64            # reduce if OOM
+TRAIN_SEQ_LEN = 512        # training crop length (val stays at MAX_SEQ_LEN=1024 for comparability).
+                          # throughput-vs-context tradeoff: shorter crops -> ~2x tokens but less long-range.
+assert TRAIN_SEQ_LEN <= MAX_SEQ_LEN
 EVAL_EVERY = 50            # steps between quick val checks (loss/top1/top5) for wandb charts
 
 SAVE_CHECKPOINT = False    # off by default -- every kept experiment would otherwise add a multi-MB
@@ -131,7 +134,7 @@ USE_AMP = device.type == "cuda"
 AMP_DTYPE = torch.float16
 scaler = torch.amp.GradScaler(device=device.type, enabled=USE_AMP)
 
-train_loader = make_dataloader(tokenizer, BATCH_SIZE, MAX_SEQ_LEN, "train", device)
+train_loader = make_dataloader(tokenizer, BATCH_SIZE, TRAIN_SEQ_LEN, "train", device)
 val_loader = make_dataloader(tokenizer, BATCH_SIZE, MAX_SEQ_LEN, "val", device)
 x, y, epoch = next(train_loader)  # prefetch first batch
 
