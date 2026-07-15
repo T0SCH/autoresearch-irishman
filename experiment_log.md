@@ -159,3 +159,9 @@ Surprise worth chasing: training loss (on the windowed batches) plateaus early �
 **Working best config: hidden_size=128, embed_size=128 (tied), num_layers=2, lr=0.008, weight_decay=0.05, dropout=0.1, stateful windowed loader (seq_len=256, window_batch_size=256). val_bpb 1.349841.**
 
 **Mandatory 10th-keep sample spot-check (per program.md):** re-ran the confirmed ab646c4 config once more with a temporary `SAMPLE_CHECK` flag (val_bpb reproduced at 1.350021, matching within noise) and generated 3 samples (temp=0.8, ~512 tokens, seeded from val tune prefixes at `M:6/8`/`M:4/4`/`M:4/4`). **Verdict:** bar lengths are overwhelmingly consistent with each sample's declared meter (6/8 bars summing to 6 eighth-note units, 4/4 bars to 8, checked by hand across dozens of bars) and repeat/variant markers (`:|`, `::`, `|1…|2…`, triplet `(3` groups) are used in structurally plausible places — a real qualitative win matching the quantitative val_bpb gains, and a meaningful contrast to what a vanilla RNN would be expected to produce at this point per program.md's framing.
+
+## a780ccd — discard
+**Source:** agent
+**Change:** `WINDOW_BATCH_SIZE` 256→512, continuing to bracket upward.
+**Result:** val_bpb 1.381949 (worse than ab646c4's 1.349841), top1 0.6870, top5 0.9344, memory 2.6GB (up from 1.3GB — real VRAM growth, though still comfortably inside the T4's 15GB), 2311 steps, 301.5M tokens (comparable throughput, no confound)
+**Notes:** Brackets `WINDOW_BATCH_SIZE=256` as a local optimum: 128 (1.353960) → 256 (1.349841, best) → 512 (1.381949, worse). Past 256, the larger batch's gradient-noise reduction stops paying for itself relative to fewer, larger steps and the growing memory cost. `WINDOW_BATCH_SIZE=256` settles as confirmed. Reverting to `ab646c4`.
