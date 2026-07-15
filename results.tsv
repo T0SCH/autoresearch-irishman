@@ -22,3 +22,4 @@ cf6f76a	1.293933	0.7201	0.9469	1.2	2945	151.3	1.812	discard	LR warmup(5%)+cosine
 da077fd	1.291964	0.7203	0.9465	1.2	2916	149.8	1.812	discard	WEIGHT_DECAY 0.1->0.2 at hidden=384 — +0.0034 regressed; turnover reached, wd=0.1 is the optimum (0.05->0.1 helped, 0.1->0.2 hurt)
 73ea673	1.286117	0.7193	0.9469	1.2	2917	149.8	1.812	keep	LEARNING_RATE 0.003->0.004 at hidden=384+wd0.1 — -0.0024 new best; LR optimum shifts UP with more wd (0.002<0.003<0.004); clean keep
 fb5fa27	1.327070	0.7018	0.9434	1.2	2952	151.6	1.812	discard	LEARNING_RATE 0.004->0.005 — +0.041 regressed (too high); LR turnover at 0.004 (0.002<0.003<0.004<0.005)
+08a785c	1.301089	0.7057	0.9455	1.2	2968	152.4	1.813	discard	learned initial hidden state (nn.Parameter h0 vs zero-init) — +0.015 regressed; BOS+zero-init already sufficient, extra learnable h0 not worth it in 5min
