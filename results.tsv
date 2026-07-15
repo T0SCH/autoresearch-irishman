@@ -1,3 +1,4 @@
 commit	val_bpb	top1_acc	top5_acc	memory_gb	num_steps	tokens_M	num_params_M	status	description
 699b4f0	2.066833	0.5579	0.8660	1.4	8339	429.8	0.268	keep	baseline (unmodified nn.RNN, embed128 hidden256 layers2 dropout0 lr0.003 bs64 seq1024) -- worktree ablation-pair anchor
 2303e40	1.373228	0.6836	0.9318	1.4	2770	142.5	0.729	keep-prov	raw nn.RNN->nn.GRU swap, identical config (ablation-pair) — 33% of median tokens, throughput-confounded
+2930ca8	1.346542	0.6984	0.9324	0.7	4143	212.9	0.729	keep	GRU + fp16 mixed precision (autocast+GradScaler, T4 Turing) — keep-prov throughput re-test: 212.9M tokens (74% of median) confirms GRU win at fair throughput, promotes run-2 keep-prov
