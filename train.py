@@ -155,10 +155,8 @@ DROPOUT = 0.1             # human steer: the one LSTM-allowed dropout check per 
 # stateful vs. stateless windowing alone (run 5b26872 already tested stateless windowing
 # in isolation and found it a wash vs. whole-tune; this changes exactly one more thing --
 # carrying (h,c) across a tune's windows -- on top of that).
-LEARNING_RATE = 0.005     # own idea: 0.003 was never actually bracketed for this LSTM -- it's just
-                          # the original RNN default, carried over untested through every run so far
-                          # (only the warmup+cosine *schedule* was tested against it, never the raw
-                          # peak value itself). Bracketing upward first.
+LEARNING_RATE = 0.008     # continuing to bracket upward: 0.003->0.005 was a marginal, noisy win --
+                          # checking whether the trend continues or the flat plateau turns over.
 WEIGHT_DECAY = 0.05        # human steer: isolated re-test -- never tested alone on the LSTM (only in
                            # 5fc6b30's 5-variable bundle). At ~0.29M params with multiple epochs of
                            # exposure (9000+ steps), more plausible as a real regularizer here than
