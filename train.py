@@ -160,9 +160,7 @@ WEIGHT_DECAY = 0.05        # human steer: isolated re-test -- never tested alone
                            # 5fc6b30's 5-variable bundle). At ~0.29M params with multiple epochs of
                            # exposure (9000+ steps), more plausible as a real regularizer here than
                            # it would have been on a much smaller/undertrained early run.
-GRAD_CLIP = 5.0            # own idea: never tested on this LSTM (baseline-improve found clipping
-                          # wasn't binding for the RNN at grad_norm~0.2, well under 1.0) -- checking
-                          # whether GRAD_CLIP=1.0 is a hidden LR brake here too, or genuinely inert
+GRAD_CLIP = 1.0            # RNNs are prone to exploding gradients, clip by global norm
 
 BATCH_SIZE = 64            # only used for the val_loader/evaluate_bpb (fixed-batch, must stay
                            # comparable across configs) -- training uses the stateful windowed loader below
