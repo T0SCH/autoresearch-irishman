@@ -5,6 +5,7 @@ Usage: uv run train.py
 """
 
 import math
+import random
 import time
 from dataclasses import asdict, dataclass
 
@@ -13,7 +14,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import wandb
 
-from prepare import MAX_SEQ_LEN, TIME_BUDGET, Tokenizer, make_dataloader, evaluate_bpb
+from prepare import MAX_SEQ_LEN, TIME_BUDGET, Tokenizer, load_tunes, make_dataloader, evaluate_bpb
 
 # ---------------------------------------------------------------------------
 # RNN model
@@ -89,6 +90,9 @@ TRAIN_SEQ_LEN = 512        # training crop length (val stays at MAX_SEQ_LEN=1024
 assert TRAIN_SEQ_LEN <= MAX_SEQ_LEN
 EVAL_EVERY = 50            # steps between quick val checks (loss/top1/top5) for wandb charts
 
+SAMPLE_CHECK = False     # bar-structure spot-check (program.md every-10th-keep mechanism): when True,
+                           # generate 3 samples (temp 0.8, ~512 tok, seeded from a val tune) after eval
+                           # and write them to samples.txt. Runs after eval so it never affects val_bpb.
 SAVE_CHECKPOINT = False    # off by default -- every kept experiment would otherwise add a multi-MB
                            # blob to git history. Flip to True only for the one deliberate final run.
 
@@ -256,6 +260,30 @@ print(f"hidden_size:      {HIDDEN_SIZE}")
 wandb.log({"val_bpb": val_bpb, "top1_acc": final_top1_acc, "top5_acc": final_top5_acc,
            "peak_vram_mb": peak_vram_mb, "total_tokens_M": total_tokens / 1e6})
 wandb.finish()
+
+if SAMPLE_CHECK:
+    # Bar-structure spot-check (program.md): 3 samples at temp 0.8, ~512 tokens, seeded from a val
+    # tune's first chars so the model has a realistic ABC header to continue. Writes to samples.txt
+    # (not run.log) to avoid flooding the training log. Purely qualitative - never affects val_bpb.
+    model.eval()
+    val_tunes = load_tunes("val")
+    srng = random.Random(0)
+    bos = tokenizer.get_bos_token_id()
+    with open("samples.txt", "w") as _f:
+        for _si in range(3):
+            seed_tune = srng.choice(val_tunes)
+            prompt = tokenizer.encode(seed_tune[:64], prepend=bos)
+            ids = torch.tensor([prompt], dtype=torch.long, device=device)
+            with torch.no_grad():
+                for _ in range(512):
+                    with torch.autocast(device_type=device.type, dtype=AMP_DTYPE, enabled=USE_AMP):
+                        logits = model(ids)
+                    logits = logits[:, -1, :] / 0.8  # temperature 0.8
+                    nxt = torch.multinomial(F.softmax(logits, dim=-1), num_samples=1)
+                    ids = torch.cat([ids, nxt], dim=1)
+            _f.write(f"=== sample {_si+1} (seed tune head: {seed_tune[:32]!r}) ===\n")
+            _f.write(tokenizer.decode(ids[0].tolist()) + "\n\n")
+    print("wrote samples.txt (SAMPLE_CHECK)")
 
 if SAVE_CHECKPOINT:
     torch.save({"model_state_dict": model.state_dict(), "config": asdict(config)}, "checkpoint.pt")
