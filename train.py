@@ -43,6 +43,11 @@ class CharRNN(nn.Module):
         )
         self.drop = nn.Dropout(config.dropout)
         self.head = nn.Linear(config.hidden_size, config.vocab_size)
+        # Weight tying: share the embedding and output-head weight matrix (free win in both
+        # compute and params, confirmed on lstm-improve). Requires embed_size == hidden_size
+        # so the two matrices have the same shape (vocab x hidden).
+        if config.embed_size == config.hidden_size:
+            self.head.weight = self.embed.weight  # tied; head.bias stays an independent param
 
     def forward(self, idx, targets=None, reduction='mean'):
         x = self.embed(idx)
@@ -63,7 +68,9 @@ class CharRNN(nn.Module):
 # Model architecture
 RNN_TYPE = "gru"  # not a hyperparameter — set per worktree to tag the architecture family in
                           # wandb (rnn/lstm/gru/birnn); the agent updates this when it swaps the recurrent cell
-EMBED_SIZE = 128
+EMBED_SIZE = 256  # = HIDDEN_SIZE, to enable weight tying (embed/head share one vocab x hidden matrix).
+                # run 1817b08 showed embed=256 alone (no tying) regresses +0.026 vs embed=128;
+                # this run tests whether tying's regularization/param-sharing overcomes that.
 HIDDEN_SIZE = 256
 NUM_LAYERS = 2
 DROPOUT = 0.0             # helps once training does multiple epochs (confirmed on a fast GPU: 3 epochs
@@ -136,6 +143,7 @@ wandb.init(project="autoresearch-irishman", mode="offline",
     "num_layers": NUM_LAYERS, "dropout": DROPOUT, "learning_rate": LEARNING_RATE,
     "weight_decay": WEIGHT_DECAY, "grad_clip": GRAD_CLIP, "batch_size": BATCH_SIZE,
     "num_params": num_params, "use_amp": USE_AMP, "amp_dtype": str(AMP_DTYPE),
+    "weight_tying": (config.embed_size == config.hidden_size),
 })
 
 
