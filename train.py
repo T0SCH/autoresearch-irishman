@@ -73,8 +73,8 @@ EMBED_SIZE = 256  # = HIDDEN_SIZE, to enable weight tying (embed/head share one 
                 # this run tests whether tying's regularization/param-sharing overcomes that.
 HIDDEN_SIZE = 256
 NUM_LAYERS = 2
-DROPOUT = 0.0             # helps once training does multiple epochs (confirmed on a fast GPU: 3 epochs
-                          # in 300s overfits without it); on slower hardware a run may not even finish one
+DROPOUT = 0.1             # GRU-side test: LSTM found 0.1 a clean repeatable win (confirmed twice), RNN
+                          # the opposite (dropout hurt 4x). Priors disagree -> let GRU's own result decide.
 
 # Optimization
 LEARNING_RATE = 0.003
