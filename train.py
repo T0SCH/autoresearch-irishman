@@ -14,7 +14,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import wandb
 
-from prepare import MAX_SEQ_LEN, TIME_BUDGET, Tokenizer, load_tunes, make_dataloader, evaluate_bpb
+from prepare import MAX_SEQ_LEN, Tokenizer, load_tunes, make_dataloader, evaluate_bpb
 
 # ---------------------------------------------------------------------------
 # Sampling (for the mandatory every-10th-keep bar-line/meter spot-check)
@@ -212,6 +212,13 @@ WINDOW_BATCH_SIZE = 256    # own idea: WINDOW_BATCH_SIZE has always moved togeth
                            # Doubling here (holding TRAIN_SEQ_LEN=256) tests pure batch diversity/size.
 EVAL_EVERY = 50            # steps between quick val checks (loss/top1/top5) for wandb charts
 
+NUM_EPOCHS = 5             # unbounded full run (no TIME_BUDGET): trains for exactly this many
+                           # full passes over the ~214k-tune training set (~62M chars/epoch).
+                           # Edit this between runs -- 3 separate runs at 5/15/30 to trace the
+                           # learning curve past the 5-min budget's ~4.2-epoch exposure and find
+                           # where DROPOUT=0.1/WEIGHT_DECAY=0.05 (tuned under that short exposure)
+                           # stop being enough regularization.
+
 SAVE_CHECKPOINT = False    # off by default -- every kept experiment would otherwise add a multi-MB
                            # blob to git history. Flip to True only for the one deliberate final run.
 SAMPLE_CHECK = False       # off by default; flip True for the mandatory every-10th-keep bar-line/meter
@@ -265,7 +272,7 @@ val_loader = make_dataloader(tokenizer, BATCH_SIZE, MAX_SEQ_LEN, "val", device)
 x, y, epoch, reset_mask = next(train_loader)  # prefetch first batch
 carried_h, carried_c = None, None
 
-print(f"Time budget: {TIME_BUDGET}s")
+print(f"Epoch budget: {NUM_EPOCHS} epochs (no time limit)")
 
 # offline mode: no network calls during the run (avoids stalls in the unattended overnight loop),
 # `wandb sync wandb/offline-run-*` uploads everything afterward
@@ -275,6 +282,7 @@ wandb.init(project="autoresearch-irishman", mode="offline",
     "num_layers": NUM_LAYERS, "dropout": DROPOUT, "learning_rate": LEARNING_RATE,
     "weight_decay": WEIGHT_DECAY, "grad_clip": GRAD_CLIP, "batch_size": BATCH_SIZE,
     "train_seq_len": TRAIN_SEQ_LEN, "window_batch_size": WINDOW_BATCH_SIZE, "num_params": num_params,
+    "num_epochs": NUM_EPOCHS,
     "use_amp": use_amp,
 })
 
@@ -347,11 +355,9 @@ while True:
         total_training_time += dt
         total_tokens += tokens_this_step
 
-    pct_done = 100 * min(total_training_time / TIME_BUDGET, 1.0)
     tok_per_sec = int(tokens_this_step / dt)
-    remaining = max(0, TIME_BUDGET - total_training_time)
 
-    print(f"\rstep {step:05d} ({pct_done:.1f}%) | loss: {train_loss_f:.6f} | dt: {dt*1000:.0f}ms | tok/sec: {tok_per_sec:,} | epoch: {epoch} | remaining: {remaining:.0f}s    ", end="", flush=True)
+    print(f"\rstep {step:05d} | epoch {epoch}/{NUM_EPOCHS} | loss: {train_loss_f:.6f} | dt: {dt*1000:.0f}ms | tok/sec: {tok_per_sec:,} | elapsed: {total_training_time:.0f}s    ", end="", flush=True)
     log = {"loss": train_loss_f, "tok_per_sec": tok_per_sec, "epoch": epoch,
            "grad_norm": grad_norm.item(), "lr": optimizer.param_groups[0]["lr"]}
     if step % EVAL_EVERY == 0:
@@ -361,8 +367,10 @@ while True:
 
     step += 1
 
-    # Time's up — but only stop after warmup steps so we don't count startup
-    if step > 10 and total_training_time >= TIME_BUDGET:
+    # epoch ticks over once the shuffled tune queue wraps (see make_stateful_windowed_dataloader) --
+    # epoch > NUM_EPOCHS means we've started consuming NUM_EPOCHS+1's tunes, i.e. NUM_EPOCHS full
+    # passes are done. Only stop after warmup steps so we don't count startup.
+    if step > 10 and epoch > NUM_EPOCHS:
         break
 
 print()  # newline after \r training log
