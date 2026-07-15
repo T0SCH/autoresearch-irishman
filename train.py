@@ -169,8 +169,9 @@ TRAIN_SEQ_LEN = 256        # truncated-BPTT window length; doubled from the conf
                            # that stateful carry works, to see whether a longer single BPTT horizon
                            # (fewer, bigger windows/tune) helps further or whether 128 already captured
                            # most of the benefit
-WINDOW_BATCH_SIZE = 128    # halved vs. seq_len=128's 256 to hold batch_size*seq_len ~= 32768 constant,
-                           # isolating window length from total tokens/step
+WINDOW_BATCH_SIZE = 256    # own idea: WINDOW_BATCH_SIZE has always moved together with TRAIN_SEQ_LEN
+                           # to hold tokens/step constant, never swept independently at fixed seq_len.
+                           # Doubling here (holding TRAIN_SEQ_LEN=256) tests pure batch diversity/size.
 EVAL_EVERY = 50            # steps between quick val checks (loss/top1/top5) for wandb charts
 
 SAVE_CHECKPOINT = False    # off by default -- every kept experiment would otherwise add a multi-MB
