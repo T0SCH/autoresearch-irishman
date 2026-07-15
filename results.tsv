@@ -25,3 +25,4 @@ fadb9fd	1.413759	0.6948	0.9431	1.2	1629	53.0	0.613	discard	HIDDEN_SIZE/EMBED_SIZ
 ab646c4	1.349841	0.6926	0.9389	1.3	4662	304.8	0.277	keep	WINDOW_BATCH_SIZE 128->256 alone, seq_len held at 256 (own idea) -- new best, comparable/better throughput, more VRAM but within budget
 a780ccd	1.381949	0.6870	0.9344	2.6	2311	301.5	0.277	discard	WINDOW_BATCH_SIZE 256->512 -- worse, brackets 256 as local optimum, VRAM up to 2.6GB
 b31523f	1.347048	0.7046	0.9433	1.2	4586	299.8	0.277	keep	residual/skip connection between the 2 LSTM layers (own idea, explicit program.md example) -- new best, clean win across val_bpb/top1/top5, same param count
+16abb36	1.306870	0.7242	0.9517	0.8	11381	745.1	0.277	keep	fp16 mixed precision (autocast+GradScaler, human steer) -- new best, throughput 2.5x b31523f, unlocks step-starved axis
