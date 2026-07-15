@@ -53,16 +53,19 @@ class CharRNN(nn.Module):
         self.config = config
         self.embed = nn.Embedding(config.vocab_size, config.embed_size)
         assert config.embed_size == config.hidden_size, "weight tying requires embed_size == hidden_size"
-        assert config.num_layers == 2, "residual connection below is hardcoded for exactly 2 layers"
-        # own idea (explicit program.md example): residual/skip connection between the 2 LSTM layers.
-        # Split the fused 2-layer nn.LSTM into two separate 1-layer LSTMs so layer 2's output can be
-        # added to layer 1's output (x = x1 + x2) instead of just feeding forward -- same total
-        # per-layer parameter count as before, just wired with a skip. Loses nn.LSTM's built-in
-        # inter-layer dropout (no longer meaningful with separate modules); self.drop after the
-        # residual sum still provides the same overall dropout regularization.
+        assert config.num_layers == 3, "residual connection below is hardcoded for exactly 3 layers"
+        # own idea: extend the confirmed 2-layer residual/skip connection (b31523f) to a 3rd layer,
+        # now that the residual path has already shown it eases the gradient-flow problem that made
+        # a plain (non-residual) NUM_LAYERS=3 fail earlier in this worktree. Same ResNet-style running-
+        # sum pattern as before, just one more step: each layer's raw output is added to the running
+        # sum, and that running sum (not the raw output) feeds the next layer -- x2 = x1 + rnn2(x1),
+        # x3 = x2 + rnn3(x2). Same per-layer parameter count as before, one extra LSTM layer's worth
+        # of params overall.
         self.rnn1 = nn.LSTM(input_size=config.embed_size, hidden_size=config.hidden_size,
                              num_layers=1, batch_first=True)
         self.rnn2 = nn.LSTM(input_size=config.hidden_size, hidden_size=config.hidden_size,
+                             num_layers=1, batch_first=True)
+        self.rnn3 = nn.LSTM(input_size=config.hidden_size, hidden_size=config.hidden_size,
                              num_layers=1, batch_first=True)
         self.drop = nn.Dropout(config.dropout)
         self.head = nn.Linear(config.hidden_size, config.vocab_size)
@@ -86,8 +89,10 @@ class CharRNN(nn.Module):
             h0, c0 = init_state
         x1, (h1, c1) = self.rnn1(x, (h0[0:1], c0[0:1]))
         x2, (h2, c2) = self.rnn2(x1, (h0[1:2], c0[1:2]))
-        x = x1 + x2  # residual/skip connection between the 2 layers
-        self.last_hidden = (torch.cat([h1, h2], dim=0).detach(), torch.cat([c1, c2], dim=0).detach())
+        y2 = x1 + x2  # running residual sum after layer 2
+        x3, (h3, c3) = self.rnn3(y2, (h0[2:3], c0[2:3]))
+        x = y2 + x3  # running residual sum after layer 3
+        self.last_hidden = (torch.cat([h1, h2, h3], dim=0).detach(), torch.cat([c1, c2, c3], dim=0).detach())
         x = self.drop(x)
         logits = self.head(x)
 
@@ -171,7 +176,12 @@ EMBED_SIZE = 256          # human steer: retest w/ hidden_size, now that fp16 (1
                           # (only 38% of median tokens under fp32), this run should finally land
                           # near the fp16-era step count and give a fair capacity comparison
 HIDDEN_SIZE = 256
-NUM_LAYERS = 2
+NUM_LAYERS = 3            # own idea: extend the confirmed residual connection (b31523f) to a 3rd
+                          # layer. This worktree only ever directly tested NUM_LAYERS=1 on the LSTM
+                          # (49c8d09, discard, too shallow) -- 3-layer without residuals was assumed
+                          # to hurt by transferring baseline-improve's RNN finding, never directly
+                          # tested here. Residuals may change that calculus by easing the gradient-
+                          # flow / optimization-depth problem that made extra depth costly before.
 DROPOUT = 0.1             # human steer: the one LSTM-allowed dropout check per program.md (RNN failed
                           # 4x across every config there) -- now is the right moment: strong config
                           # settled, hidden_size/weight_decay give real capacity+regularization headroom.
