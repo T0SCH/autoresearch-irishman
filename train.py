@@ -155,8 +155,9 @@ DROPOUT = 0.1             # human steer: the one LSTM-allowed dropout check per 
 # stateful vs. stateless windowing alone (run 5b26872 already tested stateless windowing
 # in isolation and found it a wash vs. whole-tune; this changes exactly one more thing --
 # carrying (h,c) across a tune's windows -- on top of that).
-LEARNING_RATE = 0.008     # continuing to bracket upward: 0.003->0.005 was a marginal, noisy win --
-                          # checking whether the trend continues or the flat plateau turns over.
+LEARNING_RATE = 0.012     # continuing to bracket upward: 0.008 was a clean win over 0.005 -- pushing
+                          # further to find where it turns over (AdamW + grad_clip=1.0 should keep this
+                          # stable even if it's past the optimum, unlike raw SGD).
 WEIGHT_DECAY = 0.05        # human steer: isolated re-test -- never tested alone on the LSTM (only in
                            # 5fc6b30's 5-variable bundle). At ~0.29M params with multiple epochs of
                            # exposure (9000+ steps), more plausible as a real regularizer here than
