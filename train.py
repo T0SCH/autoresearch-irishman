@@ -145,10 +145,7 @@ RNN_TYPE = "lstm"  # not a hyperparameter — set per worktree to tag the archit
                           # wandb (rnn/lstm/gru/birnn); the agent updates this when it swaps the recurrent cell
 EMBED_SIZE = 128
 HIDDEN_SIZE = 128
-NUM_LAYERS = 1             # own idea: never tested reducing depth (baseline-improve only tried
-                          # increasing to 3, which hurt via slower per-step throughput). An LSTM's
-                          # 4 gates make each layer expensive -- fewer layers buys back steps/tokens;
-                          # testing whether 1 layer's own capacity ceiling costs more than that's worth.
+NUM_LAYERS = 2
 DROPOUT = 0.1             # human steer: the one LSTM-allowed dropout check per program.md (RNN failed
                           # 4x across every config there) -- now is the right moment: strong config
                           # settled, hidden_size/weight_decay give real capacity+regularization headroom.
