@@ -3,3 +3,4 @@ commit	val_bpb	top1_acc	top5_acc	memory_gb	num_steps	tokens_M	num_params_M	statu
 2303e40	1.373228	0.6836	0.9318	1.4	2770	142.5	0.729	keep-prov	raw nn.RNN->nn.GRU swap, identical config (ablation-pair) — 33% of median tokens, throughput-confounded
 2930ca8	1.346542	0.6984	0.9324	0.7	4143	212.9	0.729	keep	GRU + fp16 mixed precision (autocast+GradScaler, T4 Turing) — keep-prov throughput re-test: 212.9M tokens (74% of median) confirms GRU win at fair throughput, promotes run-2 keep-prov
 1817b08	1.372164	0.6943	0.9381	0.8	4242	217.9	0.840	discard	EMBED_SIZE 128->256 (no tying) — isolate embedding-capacity effect; regressed +0.026 bpb at comparable throughput (217.9M tok), bigger embed not useful at hidden=256 in 5min
+4542426	1.344396	0.7228	0.9440	0.8	4399	226.3	0.815	keep	weight tying (embed<->head) at embed=hidden=256 — isolates tying: -0.028 vs run4 (embed=256 no tying), -0.002 vs run3 best (new best), top1 +0.024, fewer params (head weight shared)
