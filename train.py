@@ -143,8 +143,10 @@ def make_stateful_windowed_dataloader(tokenizer, seq_len, batch_size, T, device,
 # Model architecture
 RNN_TYPE = "lstm"  # not a hyperparameter — set per worktree to tag the architecture family in
                           # wandb (rnn/lstm/gru/birnn); the agent updates this when it swaps the recurrent cell
-EMBED_SIZE = 128
-HIDDEN_SIZE = 128
+EMBED_SIZE = 192           # own idea: a smaller capacity step than HIDDEN_SIZE=256 (which stayed
+                          # keep-prov/throughput-locked across 3 attempts) -- moved up together with
+                          # HIDDEN_SIZE since weight tying requires embed_size==hidden_size.
+HIDDEN_SIZE = 192
 NUM_LAYERS = 2
 DROPOUT = 0.1             # human steer: the one LSTM-allowed dropout check per program.md (RNN failed
                           # 4x across every config there) -- now is the right moment: strong config
