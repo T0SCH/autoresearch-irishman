@@ -30,3 +30,4 @@ b9a5de3	1.245943	0.7241	0.9514	0.6	4326	141.3	1.812	keep	LR 0.004->0.003 at TRAI
 fc0d1b8	1.300941	0.7165	0.9490	0.6	4316	140.9	1.812	discard	LR 0.003->0.002 at TRAIN_SEQ_LEN=512 — +0.055 regressed (too low); LR=0.003 is the optimum at 512 (0.002<0.003<0.004: 1.301/1.246/1.249)
 bd3e775	1.264594	0.7180	0.9431	0.6	4253	138.9	1.812	discard	DROPOUT 0.1->0.2 at TRAIN_SEQ_LEN=512 — +0.019 regressed; 0.2 over-regularized even with more steps, 0.1 confirmed optimal at 512 too
 69397ec	1.242120	0.7226	0.9496	0.6	4162	135.9	1.812	keep	WEIGHT_DECAY 0.1->0.05 at TRAIN_SEQ_LEN=512 — -0.0038 new best; at 512 more updates -> LESS wd better (opposite of 1024); clean keep
+0d4c4ae	1.259244	0.7290	0.9482	0.6	4439	145.0	1.812	discard	WEIGHT_DECAY 0.05->0.025 at 512 (bracket down) — regressed +0.017; wd=0.05 is the optimum at 512 (0.025<0.05, turnover reached)
