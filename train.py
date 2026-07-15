@@ -237,6 +237,13 @@ num_params = sum(p.numel() for p in model.parameters())
 print(f"Num params: {num_params:,}")
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+# human steer: fp16 mixed precision (NOT bf16 -- T4 is Turing, no native bf16 tensor cores,
+# bf16 would run emulated/slow there and falsely look like "doesn't help"). GradScaler is
+# mandatory with fp16 (unlike bf16) since fp16's narrow exponent range underflows small
+# gradients without loss scaling. Goal: cut per-step wall time so step-starved keep-prov
+# configs (e.g. HIDDEN_SIZE=256) can reach a fair, throughput-matched comparison.
+use_amp = device.type == "cuda"
+scaler = torch.amp.GradScaler(device="cuda", enabled=use_amp)
 
 train_loader = make_stateful_windowed_dataloader(tokenizer, TRAIN_SEQ_LEN, WINDOW_BATCH_SIZE, MAX_SEQ_LEN, device)
 val_loader = make_dataloader(tokenizer, BATCH_SIZE, MAX_SEQ_LEN, "val", device)
@@ -253,6 +260,7 @@ wandb.init(project="autoresearch-irishman", mode="offline",
     "num_layers": NUM_LAYERS, "dropout": DROPOUT, "learning_rate": LEARNING_RATE,
     "weight_decay": WEIGHT_DECAY, "grad_clip": GRAD_CLIP, "batch_size": BATCH_SIZE,
     "train_seq_len": TRAIN_SEQ_LEN, "window_batch_size": WINDOW_BATCH_SIZE, "num_params": num_params,
+    "use_amp": use_amp,
 })
 
 
@@ -291,15 +299,24 @@ while True:
         rm = reset_mask.view(1, -1, 1)
         init_state = (torch.where(rm, h0_learned, carried_h), torch.where(rm, c0_learned, carried_c))
 
-    loss = model(x, y, init_state=init_state)
+    with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=use_amp):
+        loss = model(x, y, init_state=init_state)
     train_loss_f = loss.item()
     tokens_this_step = x.numel()
-    loss.backward()
+    scaler.scale(loss).backward()
+    # carried (h, c) kept as the fp32 "master" state across steps, regardless of the fp16
+    # compute inside this step's forward -- avoids accumulating fp16 rounding error into the
+    # long-lived recurrent state over ~thousands of steps, and keeps dtype consistent with
+    # the fp32 learned h0/c0 it gets torch.where-blended against at the top of the next step.
     carried_h, carried_c = model.last_hidden
+    carried_h = carried_h.float()
+    carried_c = carried_c.float()
     x, y, epoch, reset_mask = next(train_loader)
 
+    scaler.unscale_(optimizer)
     grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
-    optimizer.step()
+    scaler.step(optimizer)
+    scaler.update()
     model.zero_grad(set_to_none=True)
 
     # Fast fail: abort if loss is exploding or NaN
