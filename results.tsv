@@ -7,3 +7,5 @@ commit	val_bpb	top1_acc	top5_acc	memory_gb	num_steps	tokens_M	num_params_M	statu
 dd9fa16	1.332232	0.7024	0.9428	0.8	4178	214.7	0.815	keep	DROPOUT 0.0->0.1 — GRU-side answer: -0.012 bpb (new best), consistent with LSTM, opposite to RNN; regularization helps
 2528dfb	1.310634	0.7180	0.9445	0.8	4404	226.5	0.815	keep	WEIGHT_DECAY 0.0->0.05 — -0.022 bpb (new best), consistent with LSTM isolated win; regularization stack (dropout+wd) compounds
 1f00dfb	0.000000	0.0	0.0	0.0	1668	0.0	0.815	crash	stateful windowed loader (truncated-BPTT carry + tune-boundary reset, WINDOW_LEN=256) — FAIL guard at step 1669 (loss spike >100, fp16 hidden-state instability); also slower throughput + higher train loss than whole-tune
+45fc7b2	0.000000	0.0	0.0	0.0	1668	0.0	0.815	crash	stateful loader v2 (+ per-slot hidden norm clip HIDDEN_CLIP_NORM=5) — same deterministic NaN crash at step 1669; clip didn't help (root cause was data, not h-magnitude)
+a9d3795	1.673458	0.6281	0.9129	0.4	9835	161.0	0.815	discard	stateful loader v3 (skip all-pad-y windows, fixes NaN) — runs but REGRESSES +0.36 bpb; truncated BPTT (horizon 256) starves long-range gradients + fewer total tokens (161M<226M)
