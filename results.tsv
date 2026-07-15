@@ -6,3 +6,4 @@ commit	val_bpb	top1_acc	top5_acc	memory_gb	num_steps	tokens_M	num_params_M	statu
 4542426	1.344396	0.7228	0.9440	0.8	4399	226.3	0.815	keep	weight tying (embed<->head) at embed=hidden=256 — isolates tying: -0.028 vs run4 (embed=256 no tying), -0.002 vs run3 best (new best), top1 +0.024, fewer params (head weight shared)
 dd9fa16	1.332232	0.7024	0.9428	0.8	4178	214.7	0.815	keep	DROPOUT 0.0->0.1 — GRU-side answer: -0.012 bpb (new best), consistent with LSTM, opposite to RNN; regularization helps
 2528dfb	1.310634	0.7180	0.9445	0.8	4404	226.5	0.815	keep	WEIGHT_DECAY 0.0->0.05 — -0.022 bpb (new best), consistent with LSTM isolated win; regularization stack (dropout+wd) compounds
+1f00dfb	0.000000	0.0	0.0	0.0	1668	0.0	0.815	crash	stateful windowed loader (truncated-BPTT carry + tune-boundary reset, WINDOW_LEN=256) — FAIL guard at step 1669 (loss spike >100, fp16 hidden-state instability); also slower throughput + higher train loss than whole-tune
