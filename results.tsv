@@ -30,3 +30,4 @@ ca58381	1.222059	0.7469	0.9561	0.7	5396	352.9	1.079	keep	HIDDEN_SIZE/EMBED_SIZE 
 f9e43b5	1.207336	0.7344	0.9498	0.7	5409	353.8	1.079	keep	LEARNING_RATE 0.008->0.005, fresh re-tune at HIDDEN_SIZE=256 (own idea) -- marginal new best, throughput matched
 f7fa95c	1.205394	0.7513	0.9559	0.7	5366	350.9	1.079	keep	LEARNING_RATE 0.005->0.003, continue bracketing at HIDDEN_SIZE=256 (own idea) -- marginal new best, clean across all 3 metrics, throughput matched
 ccf7d9c	1.218838	0.7342	0.9544	0.7	5305	346.9	1.079	discard	DROPOUT 0.1->0.2 fresh re-check at HIDDEN_SIZE=256 (own idea) -- worse on all 3 metrics, 0.1 optimum holds even at larger capacity
+8003291	1.207426	0.7288	0.9454	1.1	3250	212.3	2.405	discard	HIDDEN_SIZE/EMBED_SIZE 256->384, bracket capacity ceiling upward under fp16 (human steer) -- worse val_bpb/top1/top5, 256 settles as ceiling
