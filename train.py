@@ -34,7 +34,7 @@ class CharRNN(nn.Module):
         super().__init__()
         self.config = config
         self.embed = nn.Embedding(config.vocab_size, config.embed_size)
-        self.rnn = nn.RNN(
+        self.rnn = nn.GRU(
             input_size=config.embed_size,
             hidden_size=config.hidden_size,
             num_layers=config.num_layers,
@@ -61,7 +61,7 @@ class CharRNN(nn.Module):
 # ---------------------------------------------------------------------------
 
 # Model architecture
-RNN_TYPE = "rnn"  # not a hyperparameter — set per worktree to tag the architecture family in
+RNN_TYPE = "gru"  # not a hyperparameter — set per worktree to tag the architecture family in
                           # wandb (rnn/lstm/gru/birnn); the agent updates this when it swaps the recurrent cell
 EMBED_SIZE = 128
 HIDDEN_SIZE = 256
