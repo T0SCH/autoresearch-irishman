@@ -68,10 +68,10 @@ class CharRNN(nn.Module):
 # Model architecture
 RNN_TYPE = "gru"  # not a hyperparameter — set per worktree to tag the architecture family in
                           # wandb (rnn/lstm/gru/birnn); the agent updates this when it swaps the recurrent cell
-EMBED_SIZE = 256  # = HIDDEN_SIZE, to enable weight tying (embed/head share one vocab x hidden matrix).
-                # run 1817b08 showed embed=256 alone (no tying) regresses +0.026 vs embed=128;
-                # this run tests whether tying's regularization/param-sharing overcomes that.
-HIDDEN_SIZE = 256
+EMBED_SIZE = 384  # = HIDDEN_SIZE, to enable weight tying. Raised with hidden for the capacity bracket
+                # (GRU 3 gates < LSTM 4 -> cheaper/step -> expect higher ceiling than LSTM's 256). run-1817b08
+                # showed embed-up alone hurts at 256; if 384 wins anyway, hidden capacity dominates.
+HIDDEN_SIZE = 384  # bracket above LSTM's 256 ceiling; GRU is cheaper/step so the ceiling may sit higher.
 NUM_LAYERS = 2
 DROPOUT = 0.1             # GRU-side test: LSTM found 0.1 a clean repeatable win (confirmed twice), RNN
                           # the opposite (dropout hurt 4x). Priors disagree -> let GRU's own result decide.
