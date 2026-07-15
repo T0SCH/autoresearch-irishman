@@ -193,9 +193,9 @@ EVAL_EVERY = 50            # steps between quick val checks (loss/top1/top5) for
 
 SAVE_CHECKPOINT = False    # off by default -- every kept experiment would otherwise add a multi-MB
                            # blob to git history. Flip to True only for the one deliberate final run.
-SAMPLE_CHECK = True        # normally False; flipped True here for the mandatory every-10th-keep
-                           # bar-line/meter spot-check (program.md's mechanism) on the ab646c4 config --
-                           # prints 3 samples to stdout, no checkpoint saved. Flip back to False after.
+SAMPLE_CHECK = False       # off by default; flip True for the mandatory every-10th-keep bar-line/meter
+                           # spot-check (program.md's mechanism) -- prints 3 samples to stdout, no
+                           # checkpoint saved.
 
 # ---------------------------------------------------------------------------
 # Setup: tokenizer, model, optimizer, dataloader
