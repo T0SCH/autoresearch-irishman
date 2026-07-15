@@ -11,3 +11,4 @@ dd9fa16	1.332232	0.7024	0.9428	0.8	4178	214.7	0.815	keep	DROPOUT 0.0->0.1 — GR
 a9d3795	1.673458	0.6281	0.9129	0.4	9835	161.0	0.815	discard	stateful loader v3 (skip all-pad-y windows, fixes NaN) — runs but REGRESSES +0.36 bpb; truncated BPTT (horizon 256) starves long-range gradients + fewer total tokens (161M<226M)
 201a81a	1.291502	0.7108	0.9436	1.2	3080	158.1	1.812	keep	HIDDEN_SIZE 256->384 (+embed 384 tying) — -0.019 bpb new best; GRU ceiling above 256 (unlike LSTM); 158M tok = 72% of median (clean keep, no keep-prov); params 0.815->1.812M
 66a44cf	1.314171	0.7029	0.9427	1.6	2619	134.7	3.202	discard	HIDDEN_SIZE 384->512 (+embed 512) — +0.023 regressed; ceiling overshot (256->384->512: 1.3106->1.2915->1.3142), 384 is the turnover
+688cf60	1.319508	0.7165	0.9474	1.2	3017	154.9	1.812	discard	LEARNING_RATE 0.003->0.002 at hidden=384 — +0.028 regressed; LSTM's "LR-down-with-hidden" pattern does NOT transfer to GRU, 0.003 stays better
