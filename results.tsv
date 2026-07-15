@@ -16,3 +16,4 @@ c255ddc	1.340972	0.7009	0.9399	0.7	3609	117.9	0.960	keep-prov	HIDDEN_SIZE=256 + 
 c4fde9b	1.408745	0.6910	0.9357	0.9	7735	253.1	0.368	discard	EMBED_SIZE 128->256 isolated re-test (own idea) -- worse, unlike RNN where it helped; hidden=128 doesn't need the extra embed capacity
 0f37650	1.358393	0.7035	0.9460	0.8	8869	290.3	0.277	keep	weight tying (share embed/head weights, own idea) -- new confirmed best, clean win across val_bpb/top1/top5, fewer params too
 49c8d09	1.440336	0.6869	0.9390	0.8	14945	489.4	0.145	discard	NUM_LAYERS 2->1 (own idea) -- much worse despite 60% more tokens, 1 layer lacks capacity
+8d6c59e	1.361552	0.6848	0.9317	0.8	8902	291.3	0.277	discard	GRAD_CLIP 1.0->5.0 (own idea) -- marginally worse, confirms clipping wasn't binding at 1.0 (same as baseline-improve's RNN finding)
