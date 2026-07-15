@@ -27,3 +27,4 @@ ce3eb6e	1.248672	0.7170	0.9434	0.6	4464	145.8	1.812	keep	TRAIN_SEQ_LEN 1024->512
 750fb34	1.274121	0.7298	0.9463	0.6	8020	131.2	1.812	discard	TRAIN_SEQ_LEN 512->256 — +0.025 regressed (context loss too big at 256); divergence: top1 up but val_bpb down (long-range positions under-trained); 512 is the optimum
 86da363	1.290109	0.7190	0.9456	0.9	3267	149.9	1.812	discard	TRAIN_SEQ_LEN 512->768 — +0.041 regressed (awkward middle: fewer updates than 512 AND cropping loss vs 1024); 512 confirmed optimum (256/512/768/1024 = 1.274/1.249/1.290/1.286)
 b9a5de3	1.245943	0.7241	0.9514	0.6	4326	141.3	1.812	keep	LR 0.004->0.003 at TRAIN_SEQ_LEN=512 — -0.0027 new best; LR optimum shifts DOWN with more update steps (re-bracket); 10th keep (sample verdict in log)
+fc0d1b8	1.300941	0.7165	0.9490	0.6	4316	140.9	1.812	discard	LR 0.003->0.002 at TRAIN_SEQ_LEN=512 — +0.055 regressed (too low); LR=0.003 is the optimum at 512 (0.002<0.003<0.004: 1.301/1.246/1.249)
