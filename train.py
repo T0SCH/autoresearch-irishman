@@ -212,18 +212,13 @@ WINDOW_BATCH_SIZE = 256    # own idea: WINDOW_BATCH_SIZE has always moved togeth
                            # Doubling here (holding TRAIN_SEQ_LEN=256) tests pure batch diversity/size.
 EVAL_EVERY = 50            # steps between quick val checks (loss/top1/top5) for wandb charts
 
-NUM_EPOCHS = 30            # unbounded full run (no TIME_BUDGET): trains for exactly this many
+NUM_EPOCHS = 50            # unbounded full run (no TIME_BUDGET): trains for exactly this many
                            # full passes over the ~214k-tune training set (~62M chars/epoch).
-                           # Edit this between runs -- 3 separate runs at 5/15/30 to trace the
-                           # learning curve past the 5-min budget's ~4.2-epoch exposure and find
-                           # where DROPOUT=0.1/WEIGHT_DECAY=0.05 (tuned under that short exposure)
-                           # stop being enough regularization.
+                           # Final submission run.
 
-SAVE_CHECKPOINT = False    # off by default -- every kept experiment would otherwise add a multi-MB
-                           # blob to git history. Flip to True only for the one deliberate final run.
-SAMPLE_CHECK = False       # off by default; flip True for the mandatory every-10th-keep bar-line/meter
-                           # spot-check (program.md's mechanism) -- prints 3 samples to stdout, no
-                           # checkpoint saved.
+SAVE_CHECKPOINT = True     # flipped True for the one deliberate final run.
+SAMPLE_CHECK = True        # flipped True for the mandatory every-10th-keep bar-line/meter
+                           # spot-check (program.md's mechanism) -- prints 3 samples to stdout.
 
 # ---------------------------------------------------------------------------
 # Setup: tokenizer, model, optimizer, dataloader
@@ -287,20 +282,30 @@ wandb.init(project="autoresearch-irishman", mode="offline",
 })
 
 
+QUICK_EVAL_BATCHES = 8
+
 @torch.no_grad()
 def quick_eval():
-    """Cheap single-batch val check (loss/top1/top5) for wandb charts — not the final val_bpb metric."""
+    """Val check over QUICK_EVAL_BATCHES batches (loss/top1/top5), token-weighted across
+    batches (not a naive mean of per-batch means), for wandb charts -- not the final val_bpb metric."""
     model.eval()
-    x_val, y_val, _ = next(val_loader)
-    logits = model(x_val)
-    targets_flat = y_val.view(-1)
-    mask = targets_flat != config.pad_token_id
-    loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets_flat, ignore_index=config.pad_token_id)
-    top5 = logits.view(-1, logits.size(-1)).topk(5, dim=-1).indices
-    top1_correct = (top5[:, 0] == targets_flat) & mask
-    top5_correct = (top5 == targets_flat.unsqueeze(-1)).any(dim=-1) & mask
+    loss_sum = 0.0
+    top1_correct_sum = 0
+    top5_correct_sum = 0
+    token_count = 0
+    for _ in range(QUICK_EVAL_BATCHES):
+        x_val, y_val, _ = next(val_loader)
+        logits = model(x_val)
+        targets_flat = y_val.view(-1)
+        mask = targets_flat != config.pad_token_id
+        loss_sum += F.cross_entropy(logits.view(-1, logits.size(-1)), targets_flat,
+                                     ignore_index=config.pad_token_id, reduction="sum").item()
+        top5 = logits.view(-1, logits.size(-1)).topk(5, dim=-1).indices
+        top1_correct_sum += ((top5[:, 0] == targets_flat) & mask).sum().item()
+        top5_correct_sum += ((top5 == targets_flat.unsqueeze(-1)).any(dim=-1) & mask).sum().item()
+        token_count += mask.sum().item()
     model.train()
-    return loss.item(), (top1_correct.sum() / mask.sum()).item(), (top5_correct.sum() / mask.sum()).item()
+    return loss_sum / token_count, top1_correct_sum / token_count, top5_correct_sum / token_count
 
 # ---------------------------------------------------------------------------
 # Training loop
