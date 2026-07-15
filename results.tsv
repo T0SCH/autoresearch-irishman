@@ -20,3 +20,4 @@ c4fde9b	1.408745	0.6910	0.9357	0.9	7735	253.1	0.368	discard	EMBED_SIZE 128->256 
 9933a5e	1.380445	0.6952	0.9412	0.8	8887	290.8	0.277	discard	DROPOUT 0.1->0.2 (own idea) -- worse, brackets 0.1 as local optimum
 faf90d2	1.357206	0.6892	0.9322	0.8	8939	292.6	0.277	keep	LEARNING_RATE 0.003->0.005 (own idea, never bracketed before) -- marginal new best but noisy/mixed top1-top5 signal
 c0977dd	1.353960	0.7066	0.9436	0.8	8891	291.0	0.277	keep	LEARNING_RATE 0.005->0.008, continue bracketing -- clean new best, top1/top5 also improved (not noise this time)
+e20a254	1.402148	0.6948	0.9423	0.8	8854	289.8	0.277	discard	LEARNING_RATE 0.008->0.012 -- worse, brackets 0.008 as local optimum

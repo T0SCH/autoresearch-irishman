@@ -137,3 +137,10 @@ Surprise worth chasing: training loss (on the windowed batches) plateaus early �
 **Change:** `LEARNING_RATE` 0.005→0.008, continuing to bracket upward.
 **Result:** val_bpb 1.353960 — new best (vs. faf90d2's 1.357206), top1 0.7066, top5 0.9436 (both clearly better this time — not the noisy mixed signal of the last two coin-flip results), memory 0.8GB, 8891 steps, 291.0M tokens (comparable throughput, no confound)
 **Notes:** Unlike the 0.003→0.005 step (marginal, mixed-signal), this one is a clean win across all three metrics — the LR plateau isn't as flat as it looked, or 0.008 is past a genuine local improvement, not just noise. Confirms this LSTM's LR optimum sits meaningfully above the original RNN-inherited default (0.003) that every prior run in this worktree used without ever re-bracketing. Continuing to bracket upward to find where it turns over.
+
+## e20a254 — discard
+**Source:** agent
+**Change:** `LEARNING_RATE` 0.008→0.012, continuing to bracket upward.
+**Result:** val_bpb 1.402148 (worse than c0977dd's 1.353960), top1 0.6948, top5 0.9423, memory 0.8GB, 8854 steps, 289.8M tokens (comparable throughput, no confound)
+**Notes:** Nicely brackets `LEARNING_RATE=0.008` as a local optimum: 0.003 (1.358393) → 0.005 (1.357206, marginal/noisy) → 0.008 (1.353960, best) → 0.012 (1.402148, clearly worse). `LEARNING_RATE=0.008` settles as confirmed — a real re-tuning win over the RNN-inherited 0.003 default that went unquestioned for the entire worktree until now. Reverting to `c0977dd`.
+**Working best config after the LR bracket: hidden_size=128, embed_size=128 (tied with output head), num_layers=2, lr=0.008, weight_decay=0.05, dropout=0.1, stateful windowed loader (seq_len=256, window_batch_size=128). val_bpb 1.353960 — down 35% from the run-1 RNN baseline (2.087648) and 6.4% further from the raw LSTM-swap ablation point (1.447489).**
