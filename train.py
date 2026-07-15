@@ -53,13 +53,17 @@ class CharRNN(nn.Module):
         self.config = config
         self.embed = nn.Embedding(config.vocab_size, config.embed_size)
         assert config.embed_size == config.hidden_size, "weight tying requires embed_size == hidden_size"
-        self.rnn = nn.LSTM(
-            input_size=config.embed_size,
-            hidden_size=config.hidden_size,
-            num_layers=config.num_layers,
-            dropout=config.dropout if config.num_layers > 1 else 0.0,
-            batch_first=True,
-        )
+        assert config.num_layers == 2, "residual connection below is hardcoded for exactly 2 layers"
+        # own idea (explicit program.md example): residual/skip connection between the 2 LSTM layers.
+        # Split the fused 2-layer nn.LSTM into two separate 1-layer LSTMs so layer 2's output can be
+        # added to layer 1's output (x = x1 + x2) instead of just feeding forward -- same total
+        # per-layer parameter count as before, just wired with a skip. Loses nn.LSTM's built-in
+        # inter-layer dropout (no longer meaningful with separate modules); self.drop after the
+        # residual sum still provides the same overall dropout regularization.
+        self.rnn1 = nn.LSTM(input_size=config.embed_size, hidden_size=config.hidden_size,
+                             num_layers=1, batch_first=True)
+        self.rnn2 = nn.LSTM(input_size=config.hidden_size, hidden_size=config.hidden_size,
+                             num_layers=1, batch_first=True)
         self.drop = nn.Dropout(config.dropout)
         self.head = nn.Linear(config.hidden_size, config.vocab_size)
         self.head.weight = self.embed.weight  # weight tying (own idea) -- embed_size==hidden_size
@@ -80,8 +84,10 @@ class CharRNN(nn.Module):
             c0 = self.c0.expand(-1, x.size(0), -1).contiguous()
         else:
             h0, c0 = init_state
-        x, (hn, cn) = self.rnn(x, (h0, c0))
-        self.last_hidden = (hn.detach(), cn.detach())
+        x1, (h1, c1) = self.rnn1(x, (h0[0:1], c0[0:1]))
+        x2, (h2, c2) = self.rnn2(x1, (h0[1:2], c0[1:2]))
+        x = x1 + x2  # residual/skip connection between the 2 layers
+        self.last_hidden = (torch.cat([h1, h2], dim=0).detach(), torch.cat([c1, c2], dim=0).detach())
         x = self.drop(x)
         logits = self.head(x)
 
