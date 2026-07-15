@@ -115,6 +115,13 @@ print(f"Num params: {num_params:,}")
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 
+# Mixed precision: T4 is Turing (no native bf16) -> fp16 + GradScaler. The #1 transferable
+# learning from lstm-improve (~2.5x throughput, no accuracy cost). scaler.unscale_(optimizer)
+# MUST run before clip_grad_norm_ (else clipping acts on still-scaled grads by mistake).
+USE_AMP = device.type == "cuda"
+AMP_DTYPE = torch.float16
+scaler = torch.amp.GradScaler(device=device.type, enabled=USE_AMP)
+
 train_loader = make_dataloader(tokenizer, BATCH_SIZE, MAX_SEQ_LEN, "train", device)
 val_loader = make_dataloader(tokenizer, BATCH_SIZE, MAX_SEQ_LEN, "val", device)
 x, y, epoch = next(train_loader)  # prefetch first batch
@@ -128,7 +135,7 @@ wandb.init(project="autoresearch-irishman", mode="offline",
     "device": device.type, "rnn_type": RNN_TYPE, "embed_size": EMBED_SIZE, "hidden_size": HIDDEN_SIZE,
     "num_layers": NUM_LAYERS, "dropout": DROPOUT, "learning_rate": LEARNING_RATE,
     "weight_decay": WEIGHT_DECAY, "grad_clip": GRAD_CLIP, "batch_size": BATCH_SIZE,
-    "num_params": num_params,
+    "num_params": num_params, "use_amp": USE_AMP, "amp_dtype": str(AMP_DTYPE),
 })
 
 
@@ -137,7 +144,8 @@ def quick_eval():
     """Cheap single-batch val check (loss/top1/top5) for wandb charts — not the final val_bpb metric."""
     model.eval()
     x_val, y_val, _ = next(val_loader)
-    logits = model(x_val)
+    with torch.autocast(device_type=device.type, dtype=AMP_DTYPE, enabled=USE_AMP):
+        logits = model(x_val)
     targets_flat = y_val.view(-1)
     mask = targets_flat != config.pad_token_id
     loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets_flat, ignore_index=config.pad_token_id)
@@ -159,14 +167,17 @@ while True:
     sync()
     t0 = time.time()
 
-    loss = model(x, y)
-    train_loss_f = loss.item()
+    with torch.autocast(device_type=device.type, dtype=AMP_DTYPE, enabled=USE_AMP):
+        loss = model(x, y)
+    train_loss_f = loss.item()  # real (unscaled) loss: autocast keeps loss at true scale, scaler only scales for backward
     tokens_this_step = x.numel()
-    loss.backward()
+    scaler.scale(loss).backward()  # no-op when USE_AMP=False (scaler enabled=False passes through)
     x, y, epoch = next(train_loader)
 
+    scaler.unscale_(optimizer)  # must precede clip_grad_norm_ so clipping sees real grad magnitudes
     grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
-    optimizer.step()
+    scaler.step(optimizer)
+    scaler.update()
     model.zero_grad(set_to_none=True)
 
     # Fast fail: abort if loss is exploding or NaN
