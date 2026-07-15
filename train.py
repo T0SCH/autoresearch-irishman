@@ -78,7 +78,8 @@ DROPOUT = 0.1             # GRU-side test: LSTM found 0.1 a clean repeatable win
 
 # Optimization
 LEARNING_RATE = 0.003
-WEIGHT_DECAY = 0.05       # LSTM isolated win (small, never bundled). Re-confirm on GRU; cheap one-line test.
+WEIGHT_DECAY = 0.1        # was 0.05 (tuned at hidden=256). Re-bracket at hidden=384: bigger model ->
+                          # more overfitting risk -> maybe more weight decay helps. One variable.
 GRAD_CLIP = 1.0            # RNNs are prone to exploding gradients, clip by global norm
 
 BATCH_SIZE = 64            # reduce if OOM
