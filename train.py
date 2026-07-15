@@ -212,7 +212,7 @@ WINDOW_BATCH_SIZE = 256    # own idea: WINDOW_BATCH_SIZE has always moved togeth
                            # Doubling here (holding TRAIN_SEQ_LEN=256) tests pure batch diversity/size.
 EVAL_EVERY = 50            # steps between quick val checks (loss/top1/top5) for wandb charts
 
-NUM_EPOCHS = 5             # unbounded full run (no TIME_BUDGET): trains for exactly this many
+NUM_EPOCHS = 15            # unbounded full run (no TIME_BUDGET): trains for exactly this many
                            # full passes over the ~214k-tune training set (~62M chars/epoch).
                            # Edit this between runs -- 3 separate runs at 5/15/30 to trace the
                            # learning curve past the 5-min budget's ~4.2-epoch exposure and find
