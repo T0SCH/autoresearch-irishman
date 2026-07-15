@@ -17,6 +17,23 @@ import wandb
 from prepare import MAX_SEQ_LEN, TIME_BUDGET, Tokenizer, load_tunes, make_dataloader, evaluate_bpb
 
 # ---------------------------------------------------------------------------
+# Sampling (for the mandatory every-10th-keep bar-line/meter spot-check)
+# ---------------------------------------------------------------------------
+
+@torch.no_grad()
+def generate_sample(model, tokenizer, device, seed_text, max_new_tokens=512, temperature=0.8):
+    model.eval()
+    ids = tokenizer.encode(seed_text, prepend=tokenizer.get_bos_token_id())
+    x = torch.tensor([ids], dtype=torch.long, device=device)
+    for _ in range(max_new_tokens):
+        logits = model(x[:, -MAX_SEQ_LEN:])
+        probs = F.softmax(logits[0, -1] / temperature, dim=-1)
+        next_id = torch.multinomial(probs, 1).item()
+        x = torch.cat([x, torch.tensor([[next_id]], device=device)], dim=1)
+    model.train()
+    return tokenizer.decode(x[0].tolist())
+
+# ---------------------------------------------------------------------------
 # RNN model
 # ---------------------------------------------------------------------------
 
@@ -176,6 +193,9 @@ EVAL_EVERY = 50            # steps between quick val checks (loss/top1/top5) for
 
 SAVE_CHECKPOINT = False    # off by default -- every kept experiment would otherwise add a multi-MB
                            # blob to git history. Flip to True only for the one deliberate final run.
+SAMPLE_CHECK = True        # normally False; flipped True here for the mandatory every-10th-keep
+                           # bar-line/meter spot-check (program.md's mechanism) on the ab646c4 config --
+                           # prints 3 samples to stdout, no checkpoint saved. Flip back to False after.
 
 # ---------------------------------------------------------------------------
 # Setup: tokenizer, model, optimizer, dataloader
@@ -343,3 +363,12 @@ wandb.finish()
 if SAVE_CHECKPOINT:
     torch.save({"model_state_dict": model.state_dict(), "config": asdict(config)}, "checkpoint.pt")
     print("Saved checkpoint.pt (git add + commit it manually -- this is a deliberate one-off, not part of the loop)")
+
+if SAMPLE_CHECK:
+    val_tunes = load_tunes("val")
+    print("\n=== SAMPLE CHECK (temp=0.8, ~512 tokens, seeded from val tunes) ===")
+    for i in range(3):
+        seed = val_tunes[i][:40]
+        sample = generate_sample(model, tokenizer, device, seed, max_new_tokens=512, temperature=0.8)
+        print(f"\n--- sample {i+1} (seed: {seed!r}) ---")
+        print(sample)
