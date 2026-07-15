@@ -119,3 +119,9 @@ Surprise worth chasing: training loss (on the windowed batches) plateaus early �
 **Change:** `GRAD_CLIP` 1.0→5.0 (own idea — never tested on this LSTM; `baseline-improve` found clipping wasn't binding for the RNN, grad_norm~0.2, well under 1.0).
 **Result:** val_bpb 1.361552 (marginally worse than 0f37650's 1.358393, Δ0.0032 — noise-floor-scale, same magnitude as the weight_decay test but in the wrong direction), top1 0.6848, top5 0.9317, memory 0.8GB, 8902 steps, 291.3M tokens (comparable throughput, no confound)
 **Notes:** Confirms `baseline-improve`'s finding transfers: `GRAD_CLIP` isn't a binding constraint here either — loosening it to 5.0 changes nothing meaningfully (the tiny regression is within run-to-run noise). Unlike the `WEIGHT_DECAY` coin-flip (which improved and was kept since there's no complexity tiebreaker), this one moved the wrong way, so discarding to keep val_bpb decisions consistent. `GRAD_CLIP=1.0` settles as confirmed-inert (present for safety, not doing active work). Reverting to `0f37650`.
+
+## 9933a5e — discard
+**Source:** agent
+**Change:** `DROPOUT` 0.1→0.2 (own idea — bracketing further now that 0.1 confirmed to help; program.md only mandated the one check, but a bracket is fair game once the axis is live).
+**Result:** val_bpb 1.380445 (worse than 0f37650's 1.358393), top1 0.6952, top5 0.9412, memory 0.8GB, 8887 steps, 290.8M tokens (comparable throughput, no confound)
+**Notes:** Overshoots — brackets `DROPOUT=0.1` as a local optimum (0.0 worse per b4e13aa vs. 0959fb6's predecessor, 0.1 best, 0.2 worse again). Consistent with dropout being a genuine but modest regularizer at this model size: enough to help once, not enough headroom to keep helping past 0.1. `DROPOUT=0.1` re-confirmed as settled. Reverting to `0f37650`.
